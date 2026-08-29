@@ -20,6 +20,57 @@ export default function CommandTerminalPage() {
   const [operationState, setOperationState] = useState<ActiveOperationState>(DEMO_ACTIVE_OPERATION);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const toggleVoiceInput = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: any }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setErrorMessage('Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setMandate(transcript);
+        }
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -134,8 +185,25 @@ export default function CommandTerminalPage() {
                 value={mandate}
                 onChange={(e) => setMandate(e.target.value)}
                 placeholder="Enter trading mandate (e.g. Find defined-risk opportunity in SPY)"
-                className="w-full bg-surface-container h-16 pl-12 pr-36 font-data-md text-data-md text-on-surface border border-outline-variant/30 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all rounded-sm placeholder:text-on-surface-variant/50"
+                className="w-full bg-surface-container h-16 pl-12 pr-48 font-data-md text-data-md text-on-surface border border-outline-variant/30 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all rounded-sm placeholder:text-on-surface-variant/50"
               />
+              
+              {/* Voice Dictation Button */}
+              <button
+                type="button"
+                onClick={toggleVoiceInput}
+                title={isListening ? "Listening... Speak now" : "Voice Dictate Mandate"}
+                className={`absolute inset-y-2 right-36 px-3.5 flex items-center justify-center rounded-sm transition-all border ${
+                  isListening
+                    ? "bg-error/20 border-error text-error animate-pulse"
+                    : "bg-surface-container-high border-outline-variant/40 text-on-surface-variant hover:text-primary hover:border-primary/50"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {isListening ? "mic" : "mic_none"}
+                </span>
+              </button>
+
               <button
                 type="submit"
                 disabled={isSubmitting}

@@ -251,6 +251,18 @@ class PositionInfo(BaseModel):
     unrealizedPl: float
     currentPrice: float
 
+class PortfolioSummary(BaseModel):
+    account: AccountInfo
+    positions: List[PositionInfo] = Field(default_factory=list)
+    netDelta: float = 0.12
+    netTheta: float = 48.50
+    netVega: float = -12.40
+    netGamma: float = 0.008
+    unrealizedPnl: float = 84.00
+    realizedTodayPnl: float = 138.00
+    profitTargetPct: float = 50.0
+    stopLossMultiplier: float = 2.0
+
 class MarketContext(BaseModel):
     symbol: str
     price: float

@@ -16,6 +16,7 @@ import {
   CounterfactualComparison,
   OrderResult,
   MandatePipelineStep,
+  PortfolioSummary,
 } from '@/types/voltron';
 
 import {
@@ -32,6 +33,7 @@ import {
 
 export interface ApiClient {
   getTelemetry(): Promise<TelemetryStatus>;
+  getPortfolio(): Promise<PortfolioSummary>;
   getDecision(id: string): Promise<DecisionPacket>;
   approveDecision(id: string): Promise<OrderResult>;
   rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }>;
@@ -57,6 +59,34 @@ class MockApiAdapter implements ApiClient {
 
   async getTelemetry(): Promise<TelemetryStatus> {
     return { ...DEMO_TELEMETRY, timestamp: new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' }) + ' EST' };
+  }
+
+  async getPortfolio(): Promise<PortfolioSummary> {
+    return {
+      account: {
+        accountId: 'demo-alpaca-paper',
+        status: 'ACTIVE',
+        currency: 'USD',
+        cash: 100000.0,
+        equity: 100000.0,
+        buyingPower: 200000.0,
+        isPaper: true,
+      },
+      positions: [
+        { symbol: 'SPY260918P00625000', qty: 1, side: 'long', marketValue: 110.0, avgEntryPrice: 1.08, unrealizedPl: 2.0, currentPrice: 1.10 },
+        { symbol: 'SPY260918P00630000', qty: -1, side: 'short', marketValue: -186.0, avgEntryPrice: 1.84, unrealizedPl: -2.0, currentPrice: 1.86 },
+        { symbol: 'SPY260918C00660000', qty: -1, side: 'short', marketValue: -150.0, avgEntryPrice: 1.48, unrealizedPl: -2.0, currentPrice: 1.50 },
+        { symbol: 'SPY260918C00665000', qty: 1, side: 'long', marketValue: 88.0, avgEntryPrice: 0.86, unrealizedPl: 2.0, currentPrice: 0.88 },
+      ],
+      netDelta: 0.12,
+      netTheta: 48.50,
+      netVega: -12.40,
+      netGamma: 0.008,
+      unrealizedPnl: 84.00,
+      realizedTodayPnl: 138.00,
+      profitTargetPct: 50.0,
+      stopLossMultiplier: 2.0,
+    };
   }
 
   async getDecision(id: string): Promise<DecisionPacket> {
@@ -189,6 +219,14 @@ class HttpSseApiAdapter implements ApiClient {
       return await this.fetchJson<TelemetryStatus>('/telemetry');
     } catch {
       return { ...DEMO_TELEMETRY, timestamp: new Date().toLocaleTimeString('en-US') + ' EST' };
+    }
+  }
+
+  async getPortfolio(): Promise<PortfolioSummary> {
+    try {
+      return await this.fetchJson<PortfolioSummary>('/portfolio');
+    } catch {
+      return new MockApiAdapter().getPortfolio();
     }
   }
 

@@ -29,7 +29,12 @@ class AlpacaAccountService:
 
     async def get_positions(self) -> List[PositionInfo]:
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
-            return []
+            return [
+                PositionInfo(symbol="SPY260918P00625000", qty=1.0, side="long", marketValue=110.0, avgEntryPrice=1.08, unrealizedPl=2.00, currentPrice=1.10),
+                PositionInfo(symbol="SPY260918P00630000", qty=-1.0, side="short", marketValue=-186.0, avgEntryPrice=1.84, unrealizedPl=-2.00, currentPrice=1.86),
+                PositionInfo(symbol="SPY260918C00660000", qty=-1.0, side="short", marketValue=-150.0, avgEntryPrice=1.48, unrealizedPl=-2.00, currentPrice=1.50),
+                PositionInfo(symbol="SPY260918C00665000", qty=1.0, side="long", marketValue=88.0, avgEntryPrice=0.86, unrealizedPl=2.00, currentPrice=0.88),
+            ]
 
         async with httpx.AsyncClient() as client:
             resp = await client.get(

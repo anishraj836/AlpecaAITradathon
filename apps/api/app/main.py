@@ -8,7 +8,7 @@ from app.infrastructure.database.session import init_db, get_db_session
 from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.agents.orchestrator import VoltronOrchestrator
 from app.domain.models import MandateRequest, DecisionPacket
-from app.api.routes import health, telemetry, decisions, scan, orders, events, replay, history
+from app.api.routes import health, telemetry, decisions, scan, orders, events, replay, history, portfolio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,6 +60,7 @@ app.include_router(orders.router, prefix=settings.API_PREFIX)
 app.include_router(events.router, prefix=settings.API_PREFIX)
 app.include_router(replay.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
+app.include_router(portfolio.router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 async def root():

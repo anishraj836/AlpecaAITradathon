@@ -233,6 +233,37 @@ export interface TelemetryStatus {
   timestamp: string;
 }
 
+export interface PositionInfo {
+  symbol: string;
+  qty: number;
+  side: 'long' | 'short';
+  marketValue: number;
+  avgEntryPrice: number;
+  unrealizedPl: number;
+  currentPrice: number;
+}
+
+export interface PortfolioSummary {
+  account: {
+    accountId: string;
+    status: string;
+    currency: string;
+    cash: number;
+    equity: number;
+    buyingPower: number;
+    isPaper: boolean;
+  };
+  positions: PositionInfo[];
+  netDelta: number;
+  netTheta: number;
+  netVega: number;
+  netGamma: number;
+  unrealizedPnl: number;
+  realizedTodayPnl: number;
+  profitTargetPct: number;
+  stopLossMultiplier: number;
+}
+
 export interface MandatePipelineStep {
   id: string;
   title: string;
