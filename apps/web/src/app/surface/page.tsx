@@ -12,6 +12,10 @@ export default function VolatilitySurfacePage() {
   const [surfaceData, setSurfaceData] = useState<VolatilitySurface>(DEMO_VOL_SURFACE);
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
   const [isScanning, setIsScanning] = useState(false);
+  const [rotation, setRotation] = useState({ x: 20, y: -15 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -22,6 +26,36 @@ export default function VolatilitySurfacePage() {
       isMounted = false;
     };
   }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
+    setRotation((prev) => ({
+      x: Math.max(-60, Math.min(60, prev.x - deltaY * 0.4)),
+      y: prev.y + deltaX * 0.4,
+    }));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (viewMode !== '3D') return;
+    setZoom((prev) => Math.max(0.7, Math.min(1.6, prev - e.deltaY * 0.001)));
+  };
+
+  const resetAngle = () => {
+    setRotation({ x: 20, y: -15 });
+    setZoom(1);
+  };
 
   const handleRunScan = async () => {
     setIsScanning(true);
@@ -61,6 +95,17 @@ export default function VolatilitySurfacePage() {
 
             {/* View Switcher Controls */}
             <div className="flex items-center gap-3">
+              {viewMode === '3D' && (
+                <div className="flex items-center gap-2 font-mono text-[11px] text-on-surface-variant mr-2">
+                  <span className="hidden lg:inline text-outline">🖱️ Drag to rotate</span>
+                  <button
+                    onClick={resetAngle}
+                    className="px-2 py-0.5 bg-surface-container-high hover:bg-surface-variant border border-outline-variant/40 rounded text-[10px] text-primary"
+                  >
+                    Reset Angle
+                  </button>
+                </div>
+              )}
               <div className="flex bg-surface rounded-sm border border-outline-variant/50 p-1">
                 {(['3D', 'HEATMAP', 'SMILE'] as SurfaceViewMode[]).map((mode) => (
                   <button
@@ -88,13 +133,28 @@ export default function VolatilitySurfacePage() {
           </div>
 
           {/* Surface Rendering Viewport */}
-          <div className="flex-1 relative w-full bg-[#0a1012] overflow-hidden flex items-center justify-center">
+          <div
+            className={`flex-1 relative w-full bg-[#0a1012] overflow-hidden flex items-center justify-center select-none ${
+              viewMode === '3D' ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''
+            }`}
+            onMouseDown={viewMode === '3D' ? handleMouseDown : undefined}
+            onMouseMove={viewMode === '3D' ? handleMouseMove : undefined}
+            onMouseUp={viewMode === '3D' ? handleMouseUp : undefined}
+            onMouseLeave={viewMode === '3D' ? handleMouseUp : undefined}
+            onWheel={viewMode === '3D' ? handleWheel : undefined}
+          >
             {/* Abstract radial glow */}
             <div className="absolute inset-0 opacity-40 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-surface to-background pointer-events-none" />
 
             {/* Mode 1: 3D Surface View */}
             {viewMode === '3D' && (
-              <div className="relative w-full h-full flex items-center justify-center p-8">
+              <div
+                className="relative w-full h-full flex items-center justify-center p-8 transition-transform duration-75 ease-out pointer-events-none"
+                style={{
+                  transform: `perspective(900px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) scale(${zoom})`,
+                  transformStyle: 'preserve-3d',
+                }}
+              >
                 {/* 3D Grid lines */}
                 <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none">
                   <defs>
@@ -158,7 +218,7 @@ export default function VolatilitySurfacePage() {
                 </svg>
 
                 {/* Simulated Hover Tooltip */}
-                <div className="absolute top-1/3 left-1/3 bg-surface-container-highest border border-outline-variant p-3 rounded-sm shadow-xl z-20 flex flex-col gap-2">
+                <div className="absolute top-1/3 left-1/3 bg-surface-container-highest border border-outline-variant p-3 rounded-sm shadow-xl z-20 flex flex-col gap-2 pointer-events-auto">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                     <span className="font-data-sm text-data-sm text-on-surface font-mono">ATM CALL</span>
