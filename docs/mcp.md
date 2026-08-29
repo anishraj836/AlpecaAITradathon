@@ -1,5 +1,11 @@
 # VOLTRON MCP & Broker Integration Specification
 
+**Document Version:** 1.1.0  
+**Ownership:** Integration Architect & Broker Gateway Lead  
+**Protocol:** JSON-RPC 2.0 over HTTP (Port 8001 / `packages/options-alpha-mcp/`) & Alpaca REST API
+
+---
+
 ## 1. Alpaca MCP & REST Interface Verification
 
 VOLTRON connects to Alpaca via both direct REST API (`BrokerGateway`) and JSON-RPC 2.0 Model Context Protocol (`Alpaca MCP Client`).
@@ -32,10 +38,14 @@ VOLTRON connects to Alpaca via both direct REST API (`BrokerGateway`) and JSON-R
   * **Payload Structure for Defined-Risk Multi-Leg Orders:**
     ```json
     {
-      "order_class": "mleg",
+      "symbol": "SPY",
+      "qty": "1",
+      "side": "buy",
       "type": "limit",
       "time_in_force": "day",
       "limit_price": "1.38",
+      "order_class": "mleg",
+      "client_order_id": "cl-DEC-SPY-9942",
       "legs": [
         {
           "symbol": "SPY260918P00625000",
@@ -70,14 +80,27 @@ VOLTRON connects to Alpaca via both direct REST API (`BrokerGateway`) and JSON-R
 
 ## 2. VOLTRON Options Intelligence MCP (Person 1 Ownership)
 
-Person 1 independently owns `packages/options-alpha-mcp/`. The gateway boundary exposed to the backend orchestrator conforms to the `OptionsIntelligenceGateway` interface:
+Person 1 owns `packages/options-alpha-mcp/` listening on `http://localhost:8001/rpc`. The gateway boundary exposed to the backend orchestrator conforms to the `OptionsIntelligenceGateway` interface:
 
-* `get_surface(symbol: str) -> VolatilitySurface`
-* `detect_anomalies(symbol: str) -> List[AnomalyReport]`
-* `generate_candidates(symbol: str, target_delta: float, max_budget: float) -> List[StrategyCandidate]`
-* `score_candidates(candidates: List[StrategyCandidate]) -> List[StrategyCandidate]`
-* `stress_test(strategy: StrategyCandidate) -> StressReport`
-* `compile_risk(strategy: StrategyCandidate, portfolio_equity: float) -> RiskCheckResult`
+### JSON-RPC 2.0 Tools Exposed:
+1. `get_surface`
+   * **Params:** `{"symbol": "SPY"}`
+   * **Result:** `VolatilitySurface` (Surface points, 6-node term structure, 25Δ skew snapshot, 7 anomaly detectors).
+2. `detect_anomalies`
+   * **Params:** `{"symbol": "SPY"}`
+   * **Result:** `List[AnomalyReport]` (Classified anomalies with percentile and confidence).
+3. `generate_candidates`
+   * **Params:** `{"symbol": "SPY", "target_delta": 0.15, "max_budget": 50000.0}`
+   * **Result:** `List[StrategyCandidate]` (Tournament set of 5+ defined-risk candidates).
+4. `stress_test`
+   * **Params:** `{"strategy_id": "strat-condor-01"}`
+   * **Result:** `StressReport` (21-scenario Price $\times$ IV matrix, max profit zone, baseline PnL).
+5. `compile_risk`
+   * **Params:** `{"strategy": {...}, "portfolio_equity": 100000.0}`
+   * **Result:** `RiskCheckResult` (Budget, liquidity, concentration checks, approved status, max contracts).
+6. `get_counterfactual`
+   * **Params:** `{"params": {"targetDelta": 15.0, "dteDays": 30, "budget": 2500.0}}`
+   * **Result:** `CounterfactualComparison` (Baseline vs. shifted scenario comparison).
 
 ---
 
