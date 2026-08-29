@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { VolatilitySurface } from '@/types/voltron';
 import { DEMO_VOL_SURFACE } from '@/fixtures/voltronFixtures';
+import { VolSurface3DCanvas } from '@/components/surface/VolSurface3DCanvas';
 
 type SurfaceViewMode = '3D' | 'HEATMAP' | 'SMILE';
 
@@ -12,10 +13,6 @@ export default function VolatilitySurfacePage() {
   const [surfaceData, setSurfaceData] = useState<VolatilitySurface>(DEMO_VOL_SURFACE);
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
   const [isScanning, setIsScanning] = useState(false);
-  const [rotation, setRotation] = useState({ x: 20, y: -15 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
@@ -26,36 +23,6 @@ export default function VolatilitySurfacePage() {
       isMounted = false;
     };
   }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
-    setRotation((prev) => ({
-      x: Math.max(-60, Math.min(60, prev.x - deltaY * 0.4)),
-      y: prev.y + deltaX * 0.4,
-    }));
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (viewMode !== '3D') return;
-    setZoom((prev) => Math.max(0.7, Math.min(1.6, prev - e.deltaY * 0.001)));
-  };
-
-  const resetAngle = () => {
-    setRotation({ x: 20, y: -15 });
-    setZoom(1);
-  };
 
   const handleRunScan = async () => {
     setIsScanning(true);
@@ -95,17 +62,6 @@ export default function VolatilitySurfacePage() {
 
             {/* View Switcher Controls */}
             <div className="flex items-center gap-3">
-              {viewMode === '3D' && (
-                <div className="flex items-center gap-2 font-mono text-[11px] text-on-surface-variant mr-2">
-                  <span className="hidden lg:inline text-outline">🖱️ Drag to rotate</span>
-                  <button
-                    onClick={resetAngle}
-                    className="px-2 py-0.5 bg-surface-container-high hover:bg-surface-variant border border-outline-variant/40 rounded text-[10px] text-primary"
-                  >
-                    Reset Angle
-                  </button>
-                </div>
-              )}
               <div className="flex bg-surface rounded-sm border border-outline-variant/50 p-1">
                 {(['3D', 'HEATMAP', 'SMILE'] as SurfaceViewMode[]).map((mode) => (
                   <button
@@ -133,122 +89,9 @@ export default function VolatilitySurfacePage() {
           </div>
 
           {/* Surface Rendering Viewport */}
-          <div
-            className={`flex-1 relative w-full bg-[#0a1012] overflow-hidden flex items-center justify-center select-none ${
-              viewMode === '3D' ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''
-            }`}
-            onMouseDown={viewMode === '3D' ? handleMouseDown : undefined}
-            onMouseMove={viewMode === '3D' ? handleMouseMove : undefined}
-            onMouseUp={viewMode === '3D' ? handleMouseUp : undefined}
-            onMouseLeave={viewMode === '3D' ? handleMouseUp : undefined}
-            onWheel={viewMode === '3D' ? handleWheel : undefined}
-          >
-            {/* Abstract radial glow */}
-            <div className="absolute inset-0 opacity-40 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-surface to-background pointer-events-none" />
-
-            {/* Mode 1: 3D Surface View */}
-            {viewMode === '3D' && (
-              <div
-                className="relative w-full h-full flex items-center justify-center p-8 transition-transform duration-75 ease-out pointer-events-none"
-                style={{
-                  transform: `perspective(900px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) scale(${zoom})`,
-                  transformStyle: 'preserve-3d',
-                }}
-              >
-                {/* 3D Grid lines */}
-                <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none">
-                  <defs>
-                    <pattern id="vol-grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#849396" strokeWidth="1" />
-                    </pattern>
-                  </defs>
-                  <rect
-                    width="100%"
-                    height="100%"
-                    fill="url(#vol-grid-pattern)"
-                    style={{ transform: 'perspective(500px) rotateX(60deg) scale(2)', transformOrigin: 'top center' }}
-                  />
-                </svg>
-
-                {/* Parametric Wireframe Mesh Mockup */}
-                <svg className="w-[85%] h-[80%] opacity-90 drop-shadow-[0_0_20px_rgba(0,229,255,0.2)]" viewBox="0 0 800 400">
-                  {/* Surface Contour Rings */}
-                  <path
-                    d="M 50,300 Q 200,180 400,220 T 750,260"
-                    fill="none"
-                    stroke="#00e5ff"
-                    strokeWidth="2.5"
-                  />
-                  <path
-                    d="M 80,260 Q 220,140 420,180 T 720,220"
-                    fill="none"
-                    stroke="#00daf3"
-                    strokeWidth="2"
-                    strokeDasharray="4 2"
-                  />
-                  <path
-                    d="M 120,220 Q 240,100 440,140 T 680,180"
-                    fill="none"
-                    stroke="#cdbdff"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M 160,180 Q 260,70 460,100 T 640,140"
-                    fill="none"
-                    stroke="#fec931"
-                    strokeWidth="1.5"
-                  />
-                  <path
-                    d="M 200,140 Q 280,40 480,70 T 600,100"
-                    fill="none"
-                    stroke="#ffb4ab"
-                    strokeWidth="1.5"
-                  />
-
-                  {/* Connecting Ribs */}
-                  <path d="M 50,300 L 200,140" stroke="#3b494c" strokeWidth="1" strokeDasharray="2 2" />
-                  <path d="M 200,180 L 280,40" stroke="#3b494c" strokeWidth="1" strokeDasharray="2 2" />
-                  <path d="M 400,220 L 480,70" stroke="#00e5ff" strokeWidth="1.5" />
-                  <path d="M 600,240 L 540,85" stroke="#3b494c" strokeWidth="1" strokeDasharray="2 2" />
-                  <path d="M 750,260 L 600,100" stroke="#3b494c" strokeWidth="1" strokeDasharray="2 2" />
-
-                  {/* ATM Focal Node */}
-                  <circle cx="400" cy="220" r="5" fill="#00e5ff" className="animate-ping" />
-                  <circle cx="400" cy="220" r="4" fill="#00363d" stroke="#00e5ff" strokeWidth="2" />
-                </svg>
-
-                {/* Simulated Hover Tooltip */}
-                <div className="absolute top-1/3 left-1/3 bg-surface-container-highest border border-outline-variant p-3 rounded-sm shadow-xl z-20 flex flex-col gap-2 pointer-events-auto">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                    <span className="font-data-sm text-data-sm text-on-surface font-mono">ATM CALL</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
-                    <span className="font-label-xs text-label-xs text-on-surface-variant">STRIKE</span>
-                    <span className="font-data-md text-data-md text-on-surface text-right">645.00</span>
-                    <span className="font-label-xs text-label-xs text-on-surface-variant">DTE</span>
-                    <span className="font-data-md text-data-md text-on-surface text-right">14</span>
-                    <span className="font-label-xs text-label-xs text-primary/70 mt-1 pt-1 border-t border-outline-variant/50">
-                      IV
-                    </span>
-                    <span className="font-data-md text-data-md text-primary mt-1 pt-1 border-t border-outline-variant/50 text-right">
-                      24.8%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Axis Labels */}
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 font-label-xs text-label-xs text-on-surface-variant tracking-widest uppercase font-mono">
-                  Strike Price ($)
-                </div>
-                <div className="absolute top-1/2 right-6 -translate-y-1/2 rotate-90 font-label-xs text-label-xs text-on-surface-variant tracking-widest uppercase font-mono">
-                  Time to Expiration (DTE)
-                </div>
-                <div className="absolute top-1/2 left-6 -translate-y-1/2 -rotate-90 font-label-xs text-label-xs text-primary/70 tracking-widest uppercase font-mono">
-                  Implied Volatility (%)
-                </div>
-              </div>
-            )}
+          <div className="flex-1 relative w-full bg-[#0a1012] overflow-hidden flex items-center justify-center">
+            {/* Mode 1: 3D Surface View via HTML5 Canvas 3D Engine */}
+            {viewMode === '3D' && <VolSurface3DCanvas surfaceData={surfaceData} />}
 
             {/* Mode 2: Heatmap View */}
             {viewMode === 'HEATMAP' && (
