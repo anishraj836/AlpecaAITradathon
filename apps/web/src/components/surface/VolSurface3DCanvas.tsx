@@ -392,8 +392,9 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
     if (!isDragging) return;
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
-    setRotX((prev) => Math.max(-80, Math.min(80, prev - deltaY * 0.4)));
-    setRotY((prev) => (prev + deltaX * 0.4) % 360);
+    // Invert X so dragging right turns the front of the model to the right (natural grab-and-drag)
+    setRotX((prev) => Math.max(-85, Math.min(85, prev - deltaY * 0.45)));
+    setRotY((prev) => (prev - deltaX * 0.45) % 360);
     setDragStart({ x: e.clientX, y: e.clientY });
   };
 
