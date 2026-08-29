@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+__pycache__/
+*.pyc
+.venv/
+voltron.db
+*.db
+*.sqlite
+.pytest_cache/
