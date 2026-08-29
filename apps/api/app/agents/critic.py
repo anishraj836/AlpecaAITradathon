@@ -37,27 +37,52 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
     async def _execute_reasoning(self, input_data: CriticInput) -> Critique:
         strat = input_data.strategy
         stress = input_data.stressReport
+        strat_name = strat.name.lower()
 
         # Check for catastrophic tail loss in stress matrix
         worst_scenario = min(stress.matrix, key=lambda cell: cell.pnl) if stress.matrix else None
         worst_loss = abs(worst_scenario.pnl) if worst_scenario and worst_scenario.pnl < 0 else 0.0
 
-        # Assess upper / lower breakevens
+        # Assess breakevens with strategy-type awareness
         breakevens = strat.breakevens
-        upper_be = breakevens[1] if len(breakevens) > 1 else (strat.legs[-1].strike if strat.legs else 665.0)
-
-        primary_failure = f"Upside breakout beyond {upper_be:.2f} corridor."
-        details = f"Macro CPI or tech momentum could push spot price beyond {upper_be:.2f} call wing before expiration."
-
-        failure_scenarios = [
-            f"Sharp upside gap beyond {upper_be:.2f} breaches defined-risk call wing.",
-            f"Worst-case stress scenario (+3% price shift with +20% IV spike) results in -${worst_loss:,.2f} drawdown.",
-        ]
-
-        recommendations = [
-            f"Shift call wing strikes up by 1 standard deviation if spot approaches ${input_data.research.spotPrice * 1.02:.2f}.",
-            "Enforce strict stop-loss if underlying trades past upper breakeven corridor.",
-        ]
+        if "condor" in strat_name or len(breakevens) >= 2:
+            lower_be = breakevens[0] if len(breakevens) >= 2 else 628.62
+            upper_be = breakevens[1] if len(breakevens) >= 2 else 661.38
+            primary_failure = f"Corridor breach outside ${lower_be:.2f} - ${upper_be:.2f} range."
+            details = f"Macro volatility or trend acceleration could breach range corridor [${lower_be:.2f}, ${upper_be:.2f}] before expiration."
+            failure_scenarios = [
+                f"Sharp upside gap beyond ${upper_be:.2f} breaches defined-risk call wing.",
+                f"Sharp downside liquidation below ${lower_be:.2f} breaches defined-risk put wing.",
+                f"Worst-case stress scenario (+3% price shift with +20% IV spike) results in -${worst_loss:,.2f} drawdown.",
+            ]
+            recommendations = [
+                f"Shift call wing strikes up by 1 standard deviation if spot approaches ${input_data.research.spotPrice * 1.02:.2f}.",
+                "Enforce strict stop-loss if underlying trades past upper or lower breakeven corridor.",
+            ]
+        elif "put" in strat_name:
+            lower_be = breakevens[0] if breakevens else 632.84
+            primary_failure = f"Downside selloff below ${lower_be:.2f} put spread breakeven."
+            details = f"Broad market liquidation could push spot price below ${lower_be:.2f} short put strike before expiration."
+            failure_scenarios = [
+                f"Persistent downside drop below ${lower_be:.2f} realizes maximum defined loss.",
+                f"Worst-case stress scenario results in -${worst_loss:,.2f} drawdown.",
+            ]
+            recommendations = [
+                f"Set mechanical stop-loss at 2x net credit collected if spot drops below ${lower_be:.2f}.",
+                "Avoid holding through binary macro catalyst events if underlying approaches short strike.",
+            ]
+        else:
+            upper_be = breakevens[0] if breakevens else 661.38
+            primary_failure = f"Upside rally beyond ${upper_be:.2f} call spread breakeven."
+            details = f"Momentum breakout could push spot price above ${upper_be:.2f} short call strike before expiration."
+            failure_scenarios = [
+                f"Sharp upward momentum beyond ${upper_be:.2f} breaches short call strike.",
+                f"Worst-case stress scenario results in -${worst_loss:,.2f} drawdown.",
+            ]
+            recommendations = [
+                f"Set mechanical stop-loss at 2x net credit collected if spot rallies above ${upper_be:.2f}.",
+                "Enforce strict risk limit.",
+            ]
 
         verdict: Any = "APPROVED_WITH_CONDITIONS"
         severity: Any = "MEDIUM"

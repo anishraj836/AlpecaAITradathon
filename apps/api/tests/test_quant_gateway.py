@@ -48,7 +48,7 @@ async def test_stress_test_matrix():
     quant = MockOptionsIntelligenceGateway()
     stress = await quant.stress_test("strat-condor-01")
     assert isinstance(stress, StressReport)
-    assert len(stress.matrix) == 15  # 5 price shifts x 3 IV shifts
+    assert len(stress.matrix) == 21  # 7 price shifts x 3 IV shifts
     assert stress.maxProfitZone.maxPnl == 12450.0
 
 @pytest.mark.asyncio

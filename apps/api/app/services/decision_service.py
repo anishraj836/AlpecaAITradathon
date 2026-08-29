@@ -63,24 +63,12 @@ class DecisionService:
         raise HTTPException(status_code=404, detail=f"Decision '{decision_id}' not found.")
 
     async def approve_decision(self, decision_id: str) -> OrderResult:
-        packet = await self.get_decision(decision_id)
-        
-        # Verify Deterministic Risk Compiler Gate
-        if not packet.riskCompilerResult.isApproved:
-            raise ValueError(f"Deterministic Risk Compiler violation: Decision {decision_id} failed risk checks.")
-
-        # Execute Order via Paper Broker Gateway
-        order_result = await self.broker_gateway.place_multileg_order(packet)
-
-        # Update decision status to APPROVED
-        packet.status = "APPROVED"
-        await self.repo.save(packet)
-        await self.session.commit()
-        return order_result
+        from app.services.execution_service import ExecutionService
+        exec_service = ExecutionService(self.session, self.broker_gateway)
+        return await exec_service.approve_and_execute(decision_id)
 
     async def reject_decision(self, decision_id: str) -> bool:
-        packet = await self.get_decision(decision_id)
-        packet.status = "REJECTED"
-        await self.repo.save(packet)
-        await self.session.commit()
-        return True
+        from app.services.execution_service import ExecutionService
+        exec_service = ExecutionService(self.session, self.broker_gateway)
+        return await exec_service.reject_decision(decision_id)
+

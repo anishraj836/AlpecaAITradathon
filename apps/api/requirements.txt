@@ -18,9 +18,9 @@ iniconfig==2.3.0
 Mako==1.4.1
 MarkupSafe==3.0.3
 msgpack==1.2.2
-numpy==2.5.2
+numpy>=1.26.0
 packaging==26.3
-pandas==3.0.5
+pandas>=2.0.0
 pluggy==1.6.0
 psycopg2-binary==2.9.12
 pydantic==2.13.5

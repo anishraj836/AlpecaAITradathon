@@ -68,4 +68,4 @@ async def test_quant_endpoints():
         # Stress
         stress_resp = await client.get("/api/quant/stress?strategy_id=strat-condor-01")
         assert stress_resp.status_code == 200
-        assert len(stress_resp.json()["matrix"]) == 15
+        assert len(stress_resp.json()["matrix"]) == 21
