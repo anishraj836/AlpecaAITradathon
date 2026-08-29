@@ -76,6 +76,14 @@ export const HeaderTelemetryBar: React.FC = () => {
 
       {/* Right Connection Status & User Profile */}
       <div className="flex items-center gap-6">
+        {/* Autonomous Mode Pill */}
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-surface-container-high rounded-sm border border-primary/30">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span className="font-label-xs text-label-xs text-primary font-mono tracking-wider">
+            AUTONOMOUS AGENT: ACTIVE
+          </span>
+        </div>
+
         {/* Alpaca Paper Status Pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high rounded-sm border border-outline-variant/30">
           <div className="w-2 h-2 rounded-full bg-primary-fixed-dim animate-pulse" />

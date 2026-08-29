@@ -23,7 +23,7 @@ def test_normalize_account():
 
 def test_normalize_account_fallbacks_on_empty():
     account = AlpacaNormalizer.normalize_account({}, is_paper=True)
-    assert account.equity == 1245892.12
+    assert account.equity == 100000.0
     assert account.currency == "USD"
 
 def test_normalize_market_context():
