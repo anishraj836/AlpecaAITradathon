@@ -20,8 +20,18 @@ export default function DecisionRoomPage() {
 
   useEffect(() => {
     let isMounted = true;
-    api.getDecision(decisionId).then((data) => {
-      if (isMounted) setDecision(data);
+    api.getDecision(decisionId).then(async (data) => {
+      if (isMounted) {
+        setDecision(data);
+        if (data.status === 'APPROVED') {
+          try {
+            const ord = await api.getOrder(decisionId);
+            if (isMounted) setOrderResult(ord);
+          } catch (e) {
+            console.warn('Could not load order details:', e);
+          }
+        }
+      }
     }).catch((err) => {
       console.warn('Using local fallback decision:', err);
     });
@@ -493,30 +503,39 @@ export default function DecisionRoomPage() {
           </span>
         </div>
 
-        <div className="flex gap-4">
-          <button
-            type="button"
-            onClick={handleRejectOrder}
-            disabled={isProcessing || decision.status !== 'AWAITING_APPROVAL'}
-            className="px-8 py-3 bg-transparent border border-outline-variant hover:border-error hover:text-error text-on-surface font-data-md text-data-md uppercase tracking-wider transition-all rounded-sm disabled:opacity-40"
-          >
-            Reject Trade
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowConfirmModal(true)}
-            disabled={isProcessing || decision.status !== 'AWAITING_APPROVAL'}
-            className="relative px-12 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm disabled:opacity-40"
-          >
-            <span className="relative z-10 flex items-center gap-2 font-bold">
-              {isProcessing
-                ? 'Routing to Alpaca...'
-                : decision.status === 'APPROVED'
-                ? 'Order Approved'
-                : 'Approve Paper Order'}
-              <span className="material-symbols-outlined text-[20px]">send</span>
-            </span>
-          </button>
+        <div className="flex gap-4 items-center">
+          {decision.status === 'AWAITING_APPROVAL' && (
+            <button
+              type="button"
+              onClick={handleRejectOrder}
+              disabled={isProcessing}
+              className="px-8 py-3 bg-transparent border border-outline-variant hover:border-error hover:text-error text-on-surface font-data-md text-data-md uppercase tracking-wider transition-all rounded-sm disabled:opacity-40"
+            >
+              Reject Trade
+            </button>
+          )}
+
+          {decision.status === 'APPROVED' ? (
+            <Link
+              href="/portfolio"
+              className="relative px-8 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm flex items-center gap-2 font-bold"
+            >
+              <span>View in Live Portfolio</span>
+              <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowConfirmModal(true)}
+              disabled={isProcessing || decision.status !== 'AWAITING_APPROVAL'}
+              className="relative px-12 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm disabled:opacity-40"
+            >
+              <span className="relative z-10 flex items-center gap-2 font-bold">
+                {isProcessing ? 'Routing to Alpaca...' : 'Approve Paper Order'}
+                <span className="material-symbols-outlined text-[20px]">send</span>
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

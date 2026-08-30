@@ -35,6 +35,7 @@ export interface ApiClient {
   getTelemetry(): Promise<TelemetryStatus>;
   getPortfolio(): Promise<PortfolioSummary>;
   getDecision(id: string): Promise<DecisionPacket>;
+  getOrder(id: string): Promise<OrderResult>;
   approveDecision(id: string): Promise<OrderResult>;
   rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }>;
   getVolSurface(underlying?: string): Promise<VolatilitySurface>;
@@ -90,7 +91,20 @@ class MockApiAdapter implements ApiClient {
   }
 
   async getDecision(id: string): Promise<DecisionPacket> {
-    return { ...this.mockDecisionState, id: id || this.mockDecisionState.id };
+    return { ...this.mockDecisionState, id };
+  }
+
+  async getOrder(id: string): Promise<OrderResult> {
+    return {
+      orderId: `ALP-ORD-${id}`,
+      decisionId: id,
+      clientOrderId: `cl-${id}`,
+      status: 'accepted',
+      avgPrice: this.mockDecisionState.strategy.netCreditOrDebit,
+      qty: 1,
+      broker: 'ALPACA_PAPER',
+      filledAt: new Date().toISOString(),
+    };
   }
 
   async approveDecision(id: string): Promise<OrderResult> {
@@ -232,6 +246,10 @@ class HttpSseApiAdapter implements ApiClient {
 
   async getDecision(id: string): Promise<DecisionPacket> {
     return this.fetchJson<DecisionPacket>(`/decisions/${id}`);
+  }
+
+  async getOrder(id: string): Promise<OrderResult> {
+    return this.fetchJson<OrderResult>(`/orders/${id}`);
   }
 
   async approveDecision(id: string): Promise<OrderResult> {
