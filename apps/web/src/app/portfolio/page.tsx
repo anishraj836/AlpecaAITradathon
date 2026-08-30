@@ -71,7 +71,6 @@ export default function PortfolioPage() {
     activeRealized = basePortfolio.realizedTodayPnl + 240.0;
     activeCash = basePortfolio.account.cash + 240.0;
     activeEquity = basePortfolio.account.equity + 240.0;
-    // Quant Worker automatically closed all legs
     activePositions = [];
   } else if (scenario === 'SHOCK_DROP') {
     daysElapsed = 3;
@@ -80,7 +79,6 @@ export default function PortfolioPage() {
     activeRealized = basePortfolio.realizedTodayPnl - 280.0;
     activeCash = basePortfolio.account.cash - 280.0;
     activeEquity = basePortfolio.account.equity - 280.0;
-    // Stop loss daemon cut position
     activePositions = [];
   }
 
@@ -292,6 +290,102 @@ export default function PortfolioPage() {
           <span className="font-mono text-[11px] text-outline mt-1">
             {scenario === 'DAY_14_WIN' ? 'Locked in at 50% profit target' : 'Closed positions today'}
           </span>
+        </div>
+      </div>
+
+      {/* Planned (Expected) vs. Actual (Realized) Comparison Scorecard */}
+      <div className="bg-surface-container border border-outline-variant/30 rounded-sm overflow-hidden p-5 flex flex-col gap-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/20 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[20px]">compare_arrows</span>
+            <h3 className="font-title-sm text-title-sm text-on-surface font-mono font-bold uppercase tracking-tight">
+              Trade Plan vs. Actual Outcome Comparison Scorecard
+            </h3>
+          </div>
+          <span className="font-mono text-xs text-outline">
+            Initial Plan vs. Actual Execution
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left font-mono text-xs">
+            <thead className="bg-surface-container-high text-outline uppercase tracking-wider border-b border-outline-variant/20">
+              <tr>
+                <th className="p-3">Decision Parameter</th>
+                <th className="p-3">What Was Planned (Day 0)</th>
+                <th className="p-3">What Actually Happened</th>
+                <th className="p-3 text-right">The Difference (Variance)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/10">
+              <tr>
+                <td className="p-3 text-on-surface font-semibold">Net P&L Result</td>
+                <td className="p-3 text-on-surface-variant">+$216.00 Max Profit (50% Target: +$108.00)</td>
+                <td className="p-3 text-primary font-bold">
+                  {scenario === 'DAY_14_WIN'
+                    ? '+$240.00 Realized Profit'
+                    : scenario === 'SHOCK_DROP'
+                    ? '-$280.00 Stopped Out'
+                    : scenario === 'DAY_7'
+                    ? '+$194.00 Unrealized (+90% of target)'
+                    : '+$84.00 Open (+39% of target)'}
+                </td>
+                <td className="p-3 text-right text-primary font-bold">
+                  {scenario === 'DAY_14_WIN'
+                    ? '+$24.00 (+11% above plan)'
+                    : scenario === 'SHOCK_DROP'
+                    ? 'Stopped cleanly at bound'
+                    : scenario === 'DAY_7'
+                    ? '+45% Towards Target'
+                    : 'Baseline'}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 text-on-surface font-semibold">Holding Period</td>
+                <td className="p-3 text-on-surface-variant">30 Calendar Days to Expiration</td>
+                <td className="p-3 text-on-surface font-semibold">
+                  {scenario === 'DAY_14_WIN'
+                    ? '14 Days (Closed early at 50%)'
+                    : scenario === 'SHOCK_DROP'
+                    ? '3 Days (Emergency cut)'
+                    : scenario === 'DAY_7'
+                    ? 'Day 7 / 30'
+                    : 'Day 0 / 30'}
+                </td>
+                <td className="p-3 text-right text-[#00e5ff] font-semibold">
+                  {scenario === 'DAY_14_WIN' ? '16 Days Faster Capital Turn' : 'Active'}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 text-on-surface font-semibold">Max Downside Risk</td>
+                <td className="p-3 text-on-surface-variant">-$284.00 Max Defined Loss</td>
+                <td className="p-3 text-on-surface font-semibold">
+                  {scenario === 'SHOCK_DROP' ? '-$280.00 Max Drawdown' : '-$45.00 Max Drawdown'}
+                </td>
+                <td className="p-3 text-right text-on-surface font-semibold">
+                  {scenario === 'SHOCK_DROP' ? 'Capped within safe limit' : '+$239.00 Risk Buffer Unused'}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 text-on-surface font-semibold">Exit Rule Execution</td>
+                <td className="p-3 text-on-surface-variant">Rule: Close at 50% Profit or 2x Loss</td>
+                <td className="p-3 text-on-surface font-semibold">
+                  {scenario === 'DAY_14_WIN'
+                    ? '50% Profit Target Triggered'
+                    : scenario === 'SHOCK_DROP'
+                    ? '2x Stop-Loss Triggered'
+                    : 'Monitoring active positions'}
+                </td>
+                <td className="p-3 text-right text-primary font-semibold">
+                  {scenario === 'DAY_14_WIN'
+                    ? '✓ Executed Autonomously'
+                    : scenario === 'SHOCK_DROP'
+                    ? '✓ Protected Capital'
+                    : 'In Progress'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
