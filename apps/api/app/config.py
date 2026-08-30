@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     VOLTRON_MCP_URL: Optional[str] = "http://localhost:8001"
     ALPACA_MCP_URL: Optional[str] = "http://localhost:8002"
     
+    # Autonomous Quant Mode (Dispatches directly to Alpaca when Risk Compiler passes)
+    AUTONOMOUS_EXECUTION: bool = True
+    
     # CORS
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",

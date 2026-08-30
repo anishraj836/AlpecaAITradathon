@@ -51,9 +51,7 @@ class AlpacaTradingService:
             limit_price = order_payload.limitPrice
 
         alpaca_payload: Dict[str, Any] = {
-            "symbol": decision.underlying,
             "qty": "1",
-            "side": "buy",
             "type": "limit",
             "time_in_force": "day",
             "limit_price": str(limit_price),

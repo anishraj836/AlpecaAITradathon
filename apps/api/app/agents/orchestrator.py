@@ -34,6 +34,7 @@ from app.agents.volatility import VolatilityAnalystAgent
 from app.agents.strategist import StrategyAnalystAgent, StrategyAnalystInput
 from app.agents.critic import CriticAgent, CriticInput
 from app.services.event_broadcaster import broadcaster
+from app.config import settings
 
 logger = logging.getLogger("VoltronOrchestrator")
 
@@ -335,17 +336,33 @@ class VoltronOrchestrator:
             if self.session:
                 await self._persist_decision(packet, trace_steps, candidates, risk_result)
 
-            # Stage 13: Final Event Broadcast
-            await self._emit_event(
-                decision_id=decision_id,
-                event_type="decision_completed",
-                stage="COMPLETE",
-                status="COMPLETE",
-                message=f"Decision Packet {decision_id} ready for human approval.",
-                payload=packet.model_dump(),
-            )
+            # Stage 13: Autonomous Execution or Human-In-The-Loop Routing
+            if settings.AUTONOMOUS_EXECUTION and decision_status == "AWAITING_APPROVAL" and self.session:
+                from app.services.execution_service import ExecutionService
+                logger.info(f"[{decision_id}] AUTONOMOUS MODE ACTIVE: Risk gate passed. Routing directly to Alpaca...")
+                exec_service = ExecutionService(self.session, self.broker)
+                order_result = await exec_service.approve_and_execute(decision_id)
+                packet.status = "APPROVED"
 
-            logger.info(f"[{decision_id}] Orchestrator execution completed successfully with status: {decision_status}")
+                await self._emit_event(
+                    decision_id=decision_id,
+                    event_type="autonomous_order_executed",
+                    stage="EXECUTION",
+                    status="COMPLETE",
+                    message=f"🚀 Autonomous Quant Execution: Order {order_result.orderId} filled at ${order_result.avgPrice:.2f} on {order_result.broker}",
+                    payload=order_result.model_dump(),
+                )
+            else:
+                await self._emit_event(
+                    decision_id=decision_id,
+                    event_type="decision_completed",
+                    stage="COMPLETE",
+                    status="COMPLETE",
+                    message=f"Decision Packet {decision_id} ready for human approval.",
+                    payload=packet.model_dump(),
+                )
+
+            logger.info(f"[{decision_id}] Orchestrator execution completed successfully with status: {packet.status}")
             return packet
 
         except Exception as err:
