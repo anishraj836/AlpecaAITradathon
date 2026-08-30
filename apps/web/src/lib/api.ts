@@ -361,6 +361,6 @@ class HttpSseApiAdapter implements ApiClient {
   }
 }
 
-// Config-based singleton export
-const useMocks = process.env.NEXT_PUBLIC_USE_MOCKS !== 'false';
+// Config-based singleton export: Default strictly to LIVE backend (HttpSseApiAdapter)
+const useMocks = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
 export const api: ApiClient = useMocks ? new MockApiAdapter() : new HttpSseApiAdapter();
