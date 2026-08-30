@@ -13,6 +13,8 @@ from app.domain.models import (
     AgentTraceDetails,
 )
 
+from app.infrastructure.gemini.client import gemini_client
+
 PROMPT_PATH = str(Path(__file__).parent.parent / "prompts" / "critic.md")
 
 class CriticInput(BaseModel):
@@ -23,7 +25,7 @@ class CriticInput(BaseModel):
 
 class CriticAgent(BaseAgent[CriticInput, Critique]):
     """
-    Adversarial Critic Agent attempting to invalidate the trade and detect structural vulnerabilities.
+    Adversarial Critic Agent attempting to invalidate the trade and detect structural vulnerabilities via Gemini LLM.
     """
 
     def __init__(self):
@@ -38,6 +40,29 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
         strat = input_data.strategy
         stress = input_data.stressReport
         strat_name = strat.name.lower()
+
+        # 1. Attempt Live Gemini LLM Adversarial Reasoning
+        if gemini_client.is_configured:
+            prompt = (
+                f"Candidate Strategy to Invalidate:\n"
+                f"- Name: {strat.name}\n"
+                f"- Underlying: {strat.underlying} (Spot: ${input_data.research.spotPrice:.2f})\n"
+                f"- Net Credit: ${strat.netCreditOrDebit}\n"
+                f"- Max Loss: ${strat.maxLoss}\n"
+                f"- Breakevens: {strat.breakevens}\n"
+                f"- Market Regime: {input_data.research.marketRegimeSummary}\n"
+                f"- Volatility Skew: {input_data.volatility.skewInterpretation}\n\n"
+                f"Stress-test this trade aggressively. Identify primary failure modes, breakout vulnerabilities, and risk recommendations."
+            )
+            gemini_out = await gemini_client.generate_structured(
+                system_instruction=self.system_prompt,
+                user_prompt=prompt,
+                response_model=Critique,
+            )
+            if gemini_out:
+                return gemini_out
+
+        # 2. Deterministic Fallback Engine
 
         # Check for catastrophic tail loss in stress matrix
         worst_scenario = min(stress.matrix, key=lambda cell: cell.pnl) if stress.matrix else None

@@ -1,9 +1,13 @@
+from pathlib import Path
 from app.agents.base import BaseAgent
 from app.domain.models import VolatilitySurface, VolatilityAnalysis
+from app.infrastructure.gemini.client import gemini_client
+
+PROMPT_PATH = str(Path(__file__).parent.parent / "prompts" / "volatility.md")
 
 class VolatilityAnalystAgent(BaseAgent[VolatilitySurface, VolatilityAnalysis]):
     """
-    AI Agent 02: Volatility Analyst.
+    AI Agent 02: Volatility Analyst (powered by Gemini LLM).
     Interprets skew asymmetry, term structure slope, IV percentile, and statistical anomalies.
     """
 
@@ -12,9 +16,30 @@ class VolatilityAnalystAgent(BaseAgent[VolatilitySurface, VolatilityAnalysis]):
             role="VOLATILITY_ANALYST",
             label="Agent 02 (Volatility Analyst)",
             output_cls=VolatilityAnalysis,
+            system_prompt_path=PROMPT_PATH,
         )
 
     async def _execute_reasoning(self, input_data: VolatilitySurface) -> VolatilityAnalysis:
+        # 1. Attempt Live Gemini LLM Reasoning
+        if gemini_client.is_configured:
+            prompt = (
+                f"Volatility Surface Metrics for {input_data.underlying}:\n"
+                f"- ATM IV: {input_data.skewSnapshot.atmIV:.1f}%\n"
+                f"- 25Δ Put IV: {input_data.skewSnapshot.put25DeltaIV:.1f}%\n"
+                f"- 25Δ Call IV: {input_data.skewSnapshot.call25DeltaIV:.1f}%\n"
+                f"- Put/Call Skew Ratio: {input_data.skewSnapshot.skewRatio:.2f}x\n"
+                f"- Detected Anomalies: {[a.description for a in input_data.anomalies]}\n\n"
+                f"Interpret the skew asymmetry, term structure slope, and statistical vol anomalies."
+            )
+            gemini_out = await gemini_client.generate_structured(
+                system_instruction=self.system_prompt,
+                user_prompt=prompt,
+                response_model=VolatilityAnalysis,
+            )
+            if gemini_out:
+                return gemini_out
+
+        # 2. Deterministic Fallback Engine
         skew_ratio = input_data.skewSnapshot.skewRatio
         atm_iv = input_data.skewSnapshot.atmIV
         put_iv = input_data.skewSnapshot.put25DeltaIV

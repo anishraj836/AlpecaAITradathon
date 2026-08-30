@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     
     # Autonomous Quant Mode (Dispatches directly to Alpaca when Risk Compiler passes)
     AUTONOMOUS_EXECUTION: bool = True
+
+    # Google Gemini LLM Multi-Agent Reasoning
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     
     # CORS
     ALLOWED_ORIGINS: list[str] = [
