@@ -1,20 +1,24 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
-import { PortfolioSummary } from '@/types/voltron';
+import { PortfolioSummary, PositionInfo } from '@/types/voltron';
+
+type SimScenario = 'REALTIME' | 'DAY_7' | 'DAY_14_WIN' | 'SHOCK_DROP';
 
 export default function PortfolioPage() {
-  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
+  const [basePortfolio, setBasePortfolio] = useState<PortfolioSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [scenario, setScenario] = useState<SimScenario>('REALTIME');
+  const [notification, setNotification] = useState<{ type: 'success' | 'info' | 'warn' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     api.getPortfolio()
       .then((data) => {
         if (isMounted) {
-          setPortfolio(data);
+          setBasePortfolio(data);
           setIsLoading(false);
         }
       })
@@ -27,33 +31,172 @@ export default function PortfolioPage() {
     };
   }, []);
 
-  const handleClosePosition = (symbol: string) => {
-    setNotification(`Simulated Market Close order sent for ${symbol}`);
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  if (isLoading || !portfolio) {
+  if (isLoading || !basePortfolio) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           <span className="font-mono text-body-sm text-on-surface-variant">
-            Fetching Alpaca Portfolio & Greeks...
+            Connecting to Alpaca Paper Gateway & Live Greeks...
           </span>
         </div>
       </div>
     );
   }
 
-  const { account, positions, netDelta, netTheta, netVega, netGamma, unrealizedPnl, realizedTodayPnl, profitTargetPct } = portfolio;
+  // Fast-Forward Dynamic Simulation Calculations
+  let activeEquity = basePortfolio.account.equity;
+  let activeCash = basePortfolio.account.cash;
+  let activeUnrealized = basePortfolio.unrealizedPnl;
+  let activeRealized = basePortfolio.realizedTodayPnl;
+  let activePositions: PositionInfo[] = [...basePortfolio.positions];
+  let daysElapsed = 0;
+  let scenarioBadge = 'LIVE REAL-TIME (DAY 0)';
+
+  if (scenario === 'DAY_7') {
+    daysElapsed = 7;
+    scenarioBadge = '⏩ TIME-WARP +7 DAYS';
+    activeUnrealized = 194.0;
+    activeEquity = basePortfolio.account.equity + activeUnrealized;
+    activePositions = [
+      { symbol: 'SPY260918P00625000', qty: 1, side: 'long', marketValue: 80.0, avgEntryPrice: 1.08, unrealizedPl: -28.0, currentPrice: 0.80 },
+      { symbol: 'SPY260918P00630000', qty: -1, side: 'short', marketValue: -115.0, avgEntryPrice: 1.84, unrealizedPl: 69.0, currentPrice: 1.15 },
+      { symbol: 'SPY260918C00660000', qty: -1, side: 'short', marketValue: -75.0, avgEntryPrice: 1.48, unrealizedPl: 73.0, currentPrice: 0.75 },
+      { symbol: 'SPY260918C00665000', qty: 1, side: 'long', marketValue: 40.0, avgEntryPrice: 0.86, unrealizedPl: -46.0, currentPrice: 0.40 },
+    ];
+  } else if (scenario === 'DAY_14_WIN') {
+    daysElapsed = 14;
+    scenarioBadge = '🎯 50% PROFIT TARGET (AUTONOMOUS WIN)';
+    activeUnrealized = 0.0;
+    activeRealized = basePortfolio.realizedTodayPnl + 240.0;
+    activeCash = basePortfolio.account.cash + 240.0;
+    activeEquity = basePortfolio.account.equity + 240.0;
+    // Quant Worker automatically closed all legs
+    activePositions = [];
+  } else if (scenario === 'SHOCK_DROP') {
+    daysElapsed = 3;
+    scenarioBadge = '💥 SHOCK: SPY -3% MARKET CRASH';
+    activeUnrealized = 0.0;
+    activeRealized = basePortfolio.realizedTodayPnl - 280.0;
+    activeCash = basePortfolio.account.cash - 280.0;
+    activeEquity = basePortfolio.account.equity - 280.0;
+    // Stop loss daemon cut position
+    activePositions = [];
+  }
+
+  const handleApplyScenario = (target: SimScenario) => {
+    setScenario(target);
+    if (target === 'REALTIME') {
+      setNotification({ type: 'info', message: 'Reset to live real-time Alpaca account status.' });
+    } else if (target === 'DAY_7') {
+      setNotification({
+        type: 'info',
+        message: '⏩ Fast-Forward +7 Days: Theta time decay (+48.5/day) eroded short liability. Unrealized PnL is now +$194.00 (45% towards profit target).',
+      });
+    } else if (target === 'DAY_14_WIN') {
+      setNotification({
+        type: 'success',
+        message: '🚀 AUTONOMOUS PROFIT TARGET HIT: Spread reached 50% of maximum credit at Day 14. Quant Worker Daemon closed all 4 legs on Alpaca. Realized Gain: +$240.00!',
+      });
+    } else if (target === 'SHOCK_DROP') {
+      setNotification({
+        type: 'warn',
+        message: '🛡️ STOP-LOSS ACTIVATED: SPY plunged -3.0%. Long protective wing capped max loss at -$280.00. Quant risk compiler closed the position to protect capital.',
+      });
+    }
+  };
+
+  const { account, netDelta, netTheta, netVega, netGamma, profitTargetPct } = basePortfolio;
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
+      {/* Interactive Time-Warp Simulation Controller Bar */}
+      <div className="p-4 bg-surface-container-high border-2 border-primary/40 rounded-sm shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/20 rounded border border-primary/40">
+            <span className="material-symbols-outlined text-primary text-[24px]">fast_forward</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-on-surface text-sm uppercase">Fast-Forward Trade Lifecycle Simulator</span>
+              <span className="px-2 py-0.5 bg-primary/10 border border-primary/30 text-primary font-mono text-[10px] rounded-xs font-bold">
+                {scenarioBadge}
+              </span>
+            </div>
+            <p className="font-sans text-xs text-on-surface-variant mt-0.5">
+              Simulate theta time decay, automated 50% profit-taking, and emergency stop-loss triggers without waiting 30 calendar days.
+            </p>
+          </div>
+        </div>
+
+        {/* Simulation Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleApplyScenario('DAY_7')}
+            className={`px-3 py-1.5 font-mono text-xs uppercase font-bold rounded-sm border transition-all ${
+              scenario === 'DAY_7'
+                ? 'bg-primary text-on-primary border-primary shadow-glow-primary'
+                : 'bg-surface hover:bg-surface-variant text-on-surface border-outline-variant/40'
+            }`}
+          >
+            ⏩ +7 Days (Theta Decay)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleApplyScenario('DAY_14_WIN')}
+            className={`px-3 py-1.5 font-mono text-xs uppercase font-bold rounded-sm border transition-all ${
+              scenario === 'DAY_14_WIN'
+                ? 'bg-[#00e5ff] text-background border-[#00e5ff] shadow-glow-primary'
+                : 'bg-surface hover:bg-surface-variant text-[#00e5ff] border-[#00e5ff]/40'
+            }`}
+          >
+            🎯 +14 Days (50% Profit Win)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleApplyScenario('SHOCK_DROP')}
+            className={`px-3 py-1.5 font-mono text-xs uppercase font-bold rounded-sm border transition-all ${
+              scenario === 'SHOCK_DROP'
+                ? 'bg-error text-on-error border-error'
+                : 'bg-surface hover:bg-surface-variant text-error border-error/40'
+            }`}
+          >
+            💥 -3% Market Shock
+          </button>
+
+          {scenario !== 'REALTIME' && (
+            <button
+              type="button"
+              onClick={() => handleApplyScenario('REALTIME')}
+              className="px-2.5 py-1.5 bg-surface-container text-on-surface-variant hover:text-on-surface text-xs font-mono uppercase border border-outline-variant/30 rounded-sm"
+            >
+              Reset Live
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Top Banner Alert */}
       {notification && (
-        <div className="p-3 bg-primary/10 border border-primary/40 rounded-sm text-primary font-mono text-body-sm flex items-center justify-between">
-          <span>{notification}</span>
-          <button onClick={() => setNotification(null)} className="text-primary hover:underline">
+        <div
+          className={`p-3.5 rounded-sm font-mono text-sm flex items-center justify-between border ${
+            notification.type === 'success'
+              ? 'bg-primary/15 border-primary text-primary'
+              : notification.type === 'warn'
+              ? 'bg-error/15 border-error text-error'
+              : 'bg-surface-container-high border-outline-variant text-on-surface'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px]">
+              {notification.type === 'success' ? 'verified' : notification.type === 'warn' ? 'warning' : 'info'}
+            </span>
+            <span>{notification.message}</span>
+          </div>
+          <button onClick={() => setNotification(null)} className="hover:opacity-75 font-bold ml-4">
             ✕
           </button>
         </div>
@@ -70,18 +213,18 @@ export default function PortfolioPage() {
               Account: {account.accountId}
             </span>
           </div>
-          <h1 className="font-display-md text-display-md text-on-surface tracking-tight">
+          <h1 className="font-display-md text-display-md text-on-surface tracking-tight font-bold">
             Live Positions & Autonomous Risk Management
           </h1>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 bg-surface-container-high border border-outline-variant/30 rounded-sm font-mono text-label-xs text-on-surface-variant">
-            AUTOMATED PROFIT TARGET: <span className="text-primary font-semibold">{profitTargetPct}%</span>
+            PROFIT TARGET: <strong className="text-primary">{profitTargetPct}%</strong>
           </div>
           <div className="px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-sm font-mono text-label-xs text-primary flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            WORKER DAEMON: ACTIVE
+            AUTONOMOUS DAEMON: ACTIVE
           </div>
         </div>
       </div>
@@ -95,11 +238,11 @@ export default function PortfolioPage() {
           </span>
           <div className="mt-2">
             <span className="font-display-sm text-display-sm text-on-surface font-mono font-bold">
-              ${account.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${activeEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <span className="font-mono text-[11px] text-on-surface-variant mt-1">
-            Cash: ${account.cash.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            Cash: ${activeCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
 
@@ -114,7 +257,7 @@ export default function PortfolioPage() {
             </span>
           </div>
           <span className="font-mono text-[11px] text-primary mt-1">
-            Reg-T Margin Available
+            4x Reg-T Margin Available
           </span>
         </div>
 
@@ -124,15 +267,15 @@ export default function PortfolioPage() {
             Open Unrealized P&L
           </span>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className={`font-display-sm text-display-sm font-mono font-bold ${unrealizedPnl >= 0 ? 'text-primary' : 'text-error'}`}>
-              {unrealizedPnl >= 0 ? `+$${unrealizedPnl.toFixed(2)}` : `-$${Math.abs(unrealizedPnl).toFixed(2)}`}
+            <span className={`font-display-sm text-display-sm font-mono font-bold ${activeUnrealized >= 0 ? 'text-primary' : 'text-error'}`}>
+              {activeUnrealized >= 0 ? `+$${activeUnrealized.toFixed(2)}` : `-$${Math.abs(activeUnrealized).toFixed(2)}`}
             </span>
             <span className="font-mono text-label-sm text-primary">
-              (+{(unrealizedPnl / account.equity * 100).toFixed(2)}%)
+              (+{(activeUnrealized / account.equity * 100).toFixed(2)}%)
             </span>
           </div>
           <span className="font-mono text-[11px] text-on-surface-variant mt-1">
-            {positions.length} Active Option Legs
+            {activePositions.length} Active Option Legs (Day {daysElapsed}/30)
           </span>
         </div>
 
@@ -142,12 +285,12 @@ export default function PortfolioPage() {
             Realized Today P&L
           </span>
           <div className="mt-2">
-            <span className="font-display-sm text-display-sm text-primary font-mono font-bold">
-              +${realizedTodayPnl.toFixed(2)}
+            <span className={`font-display-sm text-display-sm font-mono font-bold ${activeRealized >= 0 ? 'text-primary' : 'text-error'}`}>
+              {activeRealized >= 0 ? `+$${activeRealized.toFixed(2)}` : `-$${Math.abs(activeRealized).toFixed(2)}`}
             </span>
           </div>
           <span className="font-mono text-[11px] text-outline mt-1">
-            Closed trades today
+            {scenario === 'DAY_14_WIN' ? 'Locked in at 50% profit target' : 'Closed positions today'}
           </span>
         </div>
       </div>
@@ -155,7 +298,7 @@ export default function PortfolioPage() {
       {/* Net Portfolio Greeks Summary Banner */}
       <div className="p-5 bg-surface-container border border-outline-variant/20 rounded-sm">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-title-sm text-title-sm text-on-surface tracking-tight uppercase font-mono">
+          <h3 className="font-title-sm text-title-sm text-on-surface tracking-tight uppercase font-mono font-bold">
             Aggregate Net Portfolio Greeks
           </h3>
           <span className="font-mono text-[11px] text-outline">
@@ -218,85 +361,108 @@ export default function PortfolioPage() {
       <div className="bg-surface-container-low border border-outline-variant/20 rounded-sm overflow-hidden">
         <div className="p-4 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container">
           <div className="flex items-center gap-3">
-            <h2 className="font-title-sm text-title-sm text-on-surface font-mono tracking-tight uppercase">
+            <h2 className="font-title-sm text-title-sm text-on-surface font-mono tracking-tight uppercase font-bold">
               Open Option Positions & Execution Ledger
             </h2>
             <span className="px-2 py-0.5 bg-surface-container-highest rounded text-[11px] font-mono text-outline">
-              {positions.length} Active Legs
+              {activePositions.length} Active Legs
             </span>
           </div>
 
-          <span className="font-mono text-[11px] text-outline">
-            Source: Alpaca REST /v2/positions
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/terminal"
+              className="text-xs font-mono text-primary hover:underline flex items-center gap-1"
+            >
+              <span>+ Execute New Mandate</span>
+            </Link>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left font-mono text-body-sm">
-            <thead className="bg-surface-container-high/60 text-outline text-[11px] uppercase tracking-wider border-b border-outline-variant/20">
-              <tr>
-                <th className="p-3.5 pl-4">Contract Symbol</th>
-                <th className="p-3.5">Side</th>
-                <th className="p-3.5 text-right">Qty</th>
-                <th className="p-3.5 text-right">Entry Price</th>
-                <th className="p-3.5 text-right">Current Mark</th>
-                <th className="p-3.5 text-right">Market Value</th>
-                <th className="p-3.5 text-right">Unrealized P&L</th>
-                <th className="p-3.5 text-center pr-4">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/10">
-              {positions.map((pos, idx) => (
-                <tr key={pos.symbol || idx} className="hover:bg-surface-container transition-colors">
-                  <td className="p-3.5 pl-4 font-semibold text-on-surface">
-                    {pos.symbol}
-                  </td>
-                  <td className="p-3.5">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pos.side === 'long' ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-tertiary/10 text-tertiary border border-tertiary/30'}`}>
-                      {pos.side.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-3.5 text-right text-on-surface">
-                    {Math.abs(pos.qty)}
-                  </td>
-                  <td className="p-3.5 text-right text-on-surface-variant">
-                    ${pos.avgEntryPrice.toFixed(2)}
-                  </td>
-                  <td className="p-3.5 text-right text-on-surface">
-                    ${pos.currentPrice.toFixed(2)}
-                  </td>
-                  <td className="p-3.5 text-right font-semibold text-on-surface">
-                    ${pos.marketValue.toFixed(2)}
-                  </td>
-                  <td className={`p-3.5 text-right font-bold ${pos.unrealizedPl >= 0 ? 'text-primary' : 'text-error'}`}>
-                    {pos.unrealizedPl >= 0 ? `+$${pos.unrealizedPl.toFixed(2)}` : `-$${Math.abs(pos.unrealizedPl).toFixed(2)}`}
-                  </td>
-                  <td className="p-3.5 text-center pr-4">
-                    <button
-                      onClick={() => handleClosePosition(pos.symbol)}
-                      className="px-2.5 py-1 text-[11px] font-mono border border-outline-variant/40 hover:border-error hover:text-error rounded transition-colors"
-                    >
-                      Close Leg
-                    </button>
-                  </td>
+        {activePositions.length === 0 ? (
+          <div className="p-12 flex flex-col items-center justify-center text-center">
+            <span className="material-symbols-outlined text-primary text-[48px] mb-2">
+              {scenario === 'DAY_14_WIN' ? 'check_circle' : 'inventory_2'}
+            </span>
+            <h3 className="font-mono text-on-surface font-bold text-lg">
+              {scenario === 'DAY_14_WIN'
+                ? 'All Positions Closed at 50% Profit Target'
+                : scenario === 'SHOCK_DROP'
+                ? 'Positions Liquidated by Emergency Stop-Loss'
+                : 'No Active Option Positions'}
+            </h3>
+            <p className="font-mono text-on-surface-variant text-xs mt-1 max-w-md">
+              {scenario === 'DAY_14_WIN'
+                ? 'The autonomous quant worker daemon successfully closed all 4 legs early, locking in +$240.00 realized profit.'
+                : 'Execute an AI mandate from the Terminal to deploy a new defined-risk structure.'}
+            </p>
+            <Link
+              href="/terminal"
+              className="mt-4 px-4 py-2 bg-primary text-on-primary font-mono text-xs uppercase font-bold rounded-sm"
+            >
+              Open Trading Terminal
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-body-sm">
+              <thead className="bg-surface-container-high/60 text-outline text-[11px] uppercase tracking-wider border-b border-outline-variant/20">
+                <tr>
+                  <th className="p-3.5 pl-4">Contract Symbol</th>
+                  <th className="p-3.5">Side</th>
+                  <th className="p-3.5 text-right">Qty</th>
+                  <th className="p-3.5 text-right">Entry Price</th>
+                  <th className="p-3.5 text-right">Current Mark</th>
+                  <th className="p-3.5 text-right">Market Value</th>
+                  <th className="p-3.5 text-right">Unrealized P&L</th>
+                  <th className="p-3.5 text-center pr-4">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Autonomous Guardrails Summary */}
-      <div className="p-4 bg-surface-container-high/40 border border-outline-variant/20 rounded-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-mono text-[11px]">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-primary" />
-          <span className="text-on-surface">
-            Autonomous Trade Exit Daemon is armed: Positions will be auto-liquidated upon reaching <strong className="text-primary">50% max profit ($69.00)</strong> or <strong className="text-error">2x max loss ($724.00)</strong>.
-          </span>
-        </div>
-        <span className="text-outline">
-          Latency: ~12ms via Alpaca Paper WebSocket
-        </span>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/10">
+                {activePositions.map((pos, idx) => (
+                  <tr key={pos.symbol || idx} className="hover:bg-surface-container transition-colors">
+                    <td className="p-3.5 pl-4 font-semibold text-on-surface">
+                      {pos.symbol}
+                    </td>
+                    <td className="p-3.5">
+                      <span
+                        className={`px-2 py-0.5 text-label-xs uppercase rounded-xs font-bold ${
+                          pos.side === 'long'
+                            ? 'bg-primary/20 text-primary border border-primary/30'
+                            : 'bg-tertiary-fixed-dim/20 text-tertiary-fixed-dim border border-tertiary-fixed-dim/30'
+                        }`}
+                      >
+                        {pos.side}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-right text-on-surface">
+                      {Math.abs(pos.qty)}
+                    </td>
+                    <td className="p-3.5 text-right text-on-surface-variant">
+                      ${pos.avgEntryPrice.toFixed(2)}
+                    </td>
+                    <td className="p-3.5 text-right text-on-surface font-semibold">
+                      ${pos.currentPrice.toFixed(2)}
+                    </td>
+                    <td className="p-3.5 text-right text-on-surface">
+                      ${pos.marketValue.toFixed(2)}
+                    </td>
+                    <td className="p-3.5 text-right font-semibold">
+                      <span className={pos.unrealizedPl >= 0 ? 'text-primary' : 'text-error'}>
+                        {pos.unrealizedPl >= 0 ? `+$${pos.unrealizedPl.toFixed(2)}` : `-$${Math.abs(pos.unrealizedPl).toFixed(2)}`}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-center pr-4">
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px]">
+                        MONITORED
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
