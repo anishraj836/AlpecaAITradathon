@@ -17,5 +17,3 @@ async def setup_test_db(monkeypatch):
     monkeypatch.setattr(settings, "GEMINI_API_KEY", None)
     await init_db()
     yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)

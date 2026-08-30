@@ -1,5 +1,9 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
+_DB_PATH = _ROOT_DIR / "voltron.db"
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "VOLTRON AI Options Decision System"
@@ -14,7 +18,7 @@ class Settings(BaseSettings):
     ALPACA_DATA_URL: str = "https://data.alpaca.markets"
     
     # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./voltron.db"
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{_DB_PATH}"
     
     # Options Intelligence MCP (Person 1) & Alpaca MCP
     USE_MOCK_QUANT: bool = False
