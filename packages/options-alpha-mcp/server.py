@@ -43,9 +43,25 @@ class JsonRpcResponse(BaseModel):
 
 # --- Quantitative Handlers (Deterministic Mathematical Implementations) ---
 
+TICKER_DEFAULT_SPOTS: Dict[str, float] = {
+    "SPY": 645.31,
+    "QQQ": 510.00,
+    "NVDA": 130.00,
+    "AAPL": 230.00,
+    "TSLA": 220.00,
+    "IWM": 220.00,
+    "MSFT": 420.00,
+    "AMZN": 180.00,
+    "META": 520.00,
+    "AMD": 150.00,
+}
+
+def get_spot_for_ticker(symbol: str) -> float:
+    return TICKER_DEFAULT_SPOTS.get(symbol.upper(), 500.0)
+
 def handle_get_surface(symbol: str) -> Dict[str, Any]:
     """Compute implied volatility surface, term structure, and skew snapshot."""
-    spot = 645.31 if symbol.upper() == "SPY" else 100.0
+    spot = get_spot_for_ticker(symbol)
     surface = build_volatility_surface(underlying=symbol, spot_price=spot, change_pct=1.2)
     # Detect statistical anomalies on the computed surface
     anomalies = detect_volatility_anomalies(
@@ -63,7 +79,7 @@ def handle_detect_anomalies(symbol: str) -> List[Dict[str, Any]]:
 
 def handle_generate_candidates(symbol: str, target_delta: float, max_budget: float) -> List[Dict[str, Any]]:
     """Generate and score multi-leg defined-risk strategy candidate structures."""
-    spot = 645.31 if symbol.upper() == "SPY" else 100.0
+    spot = get_spot_for_ticker(symbol)
     return generate_all_candidate_structures(
         symbol=symbol,
         spot=spot,

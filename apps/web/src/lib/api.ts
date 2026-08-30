@@ -175,10 +175,14 @@ class HttpSseApiAdapter implements ApiClient {
     }
 
     try {
-      // 1. Submit mandate to FastAPI /api/scan endpoint
+      // 1. Dynamically extract target ticker symbol from mandate if present
+      const symbolMatch = mandate.match(/\b(QQQ|NVDA|AAPL|TSLA|IWM|MSFT|AMZN|META|AMD|SPY)\b/i);
+      const targetSymbol = symbolMatch ? symbolMatch[1].toUpperCase() : 'SPY';
+
+      // Submit mandate to FastAPI /api/scan endpoint
       const packet = await this.fetchJson<DecisionPacket>('/scan', {
         method: 'POST',
-        body: JSON.stringify({ mandate, underlying: 'SPY' }),
+        body: JSON.stringify({ mandate, underlying: targetSymbol }),
       });
 
       // 2. Notify final progress completion

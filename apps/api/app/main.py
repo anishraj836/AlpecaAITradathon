@@ -44,9 +44,16 @@ async def run_mandate_scan(
 ):
     orchestrator = VoltronOrchestrator(broker_gw, quant_gw, session)
     try:
+        target_symbol = req.underlying or "SPY"
+        if target_symbol == "SPY" and req.mandate:
+            import re
+            m = re.search(r"\b(QQQ|NVDA|AAPL|TSLA|IWM|MSFT|AMZN|META|AMD|SPY)\b", req.mandate, re.IGNORECASE)
+            if m:
+                target_symbol = m.group(1).upper()
+
         return await orchestrator.execute_mandate(
             mandate=req.mandate,
-            symbol=req.underlying or "SPY",
+            symbol=target_symbol,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

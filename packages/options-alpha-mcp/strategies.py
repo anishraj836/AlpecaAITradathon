@@ -241,10 +241,10 @@ def generate_put_credit_spread(
     liq = 95
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.30)
 
-    exp_date = "2026-09-01"
+    exp_date = "2026-09-18"
     legs = [
-        {"id": "leg-5", "symbol": f"{symbol}260901P{int(lp*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": lp, "type": "PUT", "side": "BUY", "ratio": 1, "bid": 1.25, "ask": 1.29, "mid": 1.27, "last": 1.27, "iv": 0.260, "delta": -0.14, "gamma": 0.016, "theta": -0.04, "vega": 0.16},
-        {"id": "leg-6", "symbol": f"{symbol}260901P{int(sp*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": sp, "type": "PUT", "side": "SELL", "ratio": 1, "bid": 3.41, "ask": 3.45, "mid": 3.43, "last": 3.43, "iv": 0.252, "delta": -0.22, "gamma": 0.022, "theta": -0.07, "vega": 0.24},
+        {"id": "leg-5", "symbol": f"{symbol}260918P{int(lp*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": lp, "type": "PUT", "side": "BUY", "ratio": 1, "bid": 1.25, "ask": 1.29, "mid": 1.27, "last": 1.27, "iv": 0.260, "delta": -0.14, "gamma": 0.016, "theta": -0.04, "vega": 0.16},
+        {"id": "leg-6", "symbol": f"{symbol}260918P{int(sp*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": sp, "type": "PUT", "side": "SELL", "ratio": 1, "bid": 3.41, "ask": 3.45, "mid": 3.43, "last": 3.43, "iv": 0.252, "delta": -0.22, "gamma": 0.022, "theta": -0.07, "vega": 0.24},
     ]
 
     return {
@@ -283,10 +283,10 @@ def generate_call_credit_spread(
     liq = 91
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.15)
 
-    exp_date = "2026-09-01"
+    exp_date = "2026-09-18"
     legs = [
-        {"id": "leg-7", "symbol": f"{symbol}260901C{int(sc*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": sc, "type": "CALL", "side": "SELL", "ratio": 1, "bid": 2.85, "ask": 2.89, "mid": 2.87, "last": 2.87, "iv": 0.230, "delta": 0.20, "gamma": 0.018, "theta": -0.05, "vega": 0.21},
-        {"id": "leg-8", "symbol": f"{symbol}260901C{int(lc*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": lc, "type": "CALL", "side": "BUY", "ratio": 1, "bid": 1.20, "ask": 1.24, "mid": 1.22, "last": 1.22, "iv": 0.222, "delta": 0.12, "gamma": 0.014, "theta": -0.03, "vega": 0.15},
+        {"id": "leg-7", "symbol": f"{symbol}260918C{int(sc*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": sc, "type": "CALL", "side": "SELL", "ratio": 1, "bid": 2.85, "ask": 2.89, "mid": 2.87, "last": 2.87, "iv": 0.230, "delta": 0.20, "gamma": 0.018, "theta": -0.05, "vega": 0.21},
+        {"id": "leg-8", "symbol": f"{symbol}260918C{int(lc*1000):08d}", "underlying": symbol, "expiration": exp_date, "dte": dte, "strike": lc, "type": "CALL", "side": "BUY", "ratio": 1, "bid": 1.20, "ask": 1.24, "mid": 1.22, "last": 1.22, "iv": 0.222, "delta": 0.12, "gamma": 0.014, "theta": -0.03, "vega": 0.15},
     ]
 
     return {

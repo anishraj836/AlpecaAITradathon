@@ -1,9 +1,12 @@
 import httpx
+import logging
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from app.config import settings
 from app.domain.models import DecisionPacket, MlegOrderPayload, OrderResult
 from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
+
+logger = logging.getLogger("AlpacaTradingService")
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -83,6 +86,8 @@ class AlpacaTradingService:
                 json=alpaca_payload,
                 timeout=15.0,
             )
+            if resp.status_code >= 400:
+                logger.error(f"Alpaca Order Error ({resp.status_code}): {resp.text} | Payload: {alpaca_payload}")
             resp.raise_for_status()
             return AlpacaNormalizer.normalize_order_result(resp.json(), decision.id)
 
