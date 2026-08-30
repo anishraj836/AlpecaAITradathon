@@ -14,6 +14,7 @@ async def setup_test_db(monkeypatch):
     monkeypatch.setattr(settings, "ALPACA_API_KEY", "PKTEST_DUMMY_KEY")
     monkeypatch.setattr(settings, "ALPACA_SECRET_KEY", "SKTEST_DUMMY_SECRET")
     monkeypatch.setattr(settings, "USE_MOCK_QUANT", True)
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", None)
     await init_db()
     yield
     async with engine.begin() as conn:
