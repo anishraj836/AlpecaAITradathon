@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Google Gemini LLM Multi-Agent Reasoning
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     
     # CORS
     ALLOWED_ORIGINS: list[str] = [
