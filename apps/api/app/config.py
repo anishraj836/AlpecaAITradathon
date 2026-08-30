@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./voltron.db"
     
     # Options Intelligence MCP (Person 1) & Alpaca MCP
-    USE_MOCK_QUANT: bool = True
+    USE_MOCK_QUANT: bool = False
     VOLTRON_MCP_URL: Optional[str] = "http://localhost:8001"
     ALPACA_MCP_URL: Optional[str] = "http://localhost:8002"
     

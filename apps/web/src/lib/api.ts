@@ -1,7 +1,6 @@
 /**
  * VOLTRON API Client Layer
- * Single boundary for all frontend data access.
- * Switches seamlessly between MockApiAdapter and HttpSseApiAdapter.
+ * Real HTTP + SSE Client connecting directly to FastAPI Backend and Alpaca Gateway.
  */
 
 import {
@@ -18,18 +17,6 @@ import {
   MandatePipelineStep,
   PortfolioSummary,
 } from '@/types/voltron';
-
-import {
-  DEMO_TELEMETRY,
-  DEMO_DECISION_PACKET,
-  DEMO_VOL_SURFACE,
-  DEMO_STRATEGY_CANDIDATES,
-  DEMO_STRESS_REPORT,
-  DEMO_AGENT_TRACE,
-  DEMO_ACTIVE_OPERATION,
-  DEMO_DECISION_HISTORY,
-  DEMO_COUNTERFACTUAL,
-} from '@/fixtures/voltronFixtures';
 
 export interface ApiClient {
   getTelemetry(): Promise<TelemetryStatus>;
@@ -49,158 +36,6 @@ export interface ApiClient {
     mandate: string,
     onProgress?: (step: MandatePipelineStep) => void
   ): Promise<{ operationId: string; decisionId: string }>;
-}
-
-/**
- * Deterministic Mock Adapter for standalone frontend development and offline mode.
- * All fixture values are strictly isolated and labeled as demo state.
- */
-class MockApiAdapter implements ApiClient {
-  private mockDecisionState: DecisionPacket = { ...DEMO_DECISION_PACKET };
-
-  async getTelemetry(): Promise<TelemetryStatus> {
-    return { ...DEMO_TELEMETRY, timestamp: new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' }) + ' EST' };
-  }
-
-  async getPortfolio(): Promise<PortfolioSummary> {
-    return {
-      account: {
-        accountId: 'demo-alpaca-paper',
-        status: 'ACTIVE',
-        currency: 'USD',
-        cash: 100000.0,
-        equity: 100000.0,
-        buyingPower: 200000.0,
-        isPaper: true,
-      },
-      positions: [
-        { symbol: 'SPY260918P00625000', qty: 1, side: 'long', marketValue: 110.0, avgEntryPrice: 1.08, unrealizedPl: 2.0, currentPrice: 1.10 },
-        { symbol: 'SPY260918P00630000', qty: -1, side: 'short', marketValue: -186.0, avgEntryPrice: 1.84, unrealizedPl: -2.0, currentPrice: 1.86 },
-        { symbol: 'SPY260918C00660000', qty: -1, side: 'short', marketValue: -150.0, avgEntryPrice: 1.48, unrealizedPl: -2.0, currentPrice: 1.50 },
-        { symbol: 'SPY260918C00665000', qty: 1, side: 'long', marketValue: 88.0, avgEntryPrice: 0.86, unrealizedPl: 2.0, currentPrice: 0.88 },
-      ],
-      netDelta: 0.12,
-      netTheta: 48.50,
-      netVega: -12.40,
-      netGamma: 0.008,
-      unrealizedPnl: 84.00,
-      realizedTodayPnl: 138.00,
-      profitTargetPct: 50.0,
-      stopLossMultiplier: 2.0,
-    };
-  }
-
-  async getDecision(id: string): Promise<DecisionPacket> {
-    return { ...this.mockDecisionState, id };
-  }
-
-  async getOrder(id: string): Promise<OrderResult> {
-    return {
-      orderId: `ALP-ORD-${id}`,
-      decisionId: id,
-      clientOrderId: `cl-${id}`,
-      status: 'accepted',
-      avgPrice: this.mockDecisionState.strategy.netCreditOrDebit,
-      qty: 1,
-      broker: 'ALPACA_PAPER',
-      filledAt: new Date().toISOString(),
-    };
-  }
-
-  async approveDecision(id: string): Promise<OrderResult> {
-    this.mockDecisionState.status = 'APPROVED';
-    return {
-      orderId: `ALP-ORD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
-      decisionId: id,
-      clientOrderId: `cl-${id}-${Date.now()}`,
-      status: 'accepted',
-      avgPrice: this.mockDecisionState.strategy.netCreditOrDebit,
-      qty: 1,
-      broker: 'ALPACA_PAPER',
-      filledAt: new Date().toISOString(),
-    };
-  }
-
-  async rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }> {
-    this.mockDecisionState.status = 'REJECTED';
-    return { success: true, decisionId: id };
-  }
-
-  async getVolSurface(underlying: string = 'SPY'): Promise<VolatilitySurface> {
-    return { ...DEMO_VOL_SURFACE, underlying };
-  }
-
-  async getStrategyCandidates(underlying: string = 'SPY'): Promise<StrategyCandidate[]> {
-    return DEMO_STRATEGY_CANDIDATES.map((c) => ({ ...c, underlying }));
-  }
-
-  async getStressReport(strategyId: string = 'strat-condor-01'): Promise<StressReport> {
-    return { ...DEMO_STRESS_REPORT, strategyId };
-  }
-
-  async getAgentTrace(decisionId: string = 'DEC-SPY-9942'): Promise<AgentTraceStep[]> {
-    return DEMO_AGENT_TRACE;
-  }
-
-  async getActiveOperation(): Promise<ActiveOperationState> {
-    return DEMO_ACTIVE_OPERATION;
-  }
-
-  async getHistoricalDecisions(): Promise<HistoricalDecisionSummary[]> {
-    return DEMO_DECISION_HISTORY;
-  }
-
-  async getCounterfactual(params?: Record<string, unknown>): Promise<CounterfactualComparison> {
-    if (!params || Object.keys(params).length === 0) {
-      return DEMO_COUNTERFACTUAL;
-    }
-    const targetDelta = typeof params.targetDelta === 'number' ? params.targetDelta : DEMO_COUNTERFACTUAL.scenario.targetDelta;
-    const dteDays = typeof params.dteDays === 'number' ? params.dteDays : DEMO_COUNTERFACTUAL.scenario.dteDays;
-    const budget = typeof params.budget === 'number' ? params.budget : DEMO_COUNTERFACTUAL.scenario.allocatedBudget;
-    return {
-      ...DEMO_COUNTERFACTUAL,
-      scenario: {
-        ...DEMO_COUNTERFACTUAL.scenario,
-        targetDelta,
-        dteDays,
-        allocatedBudget: budget,
-        winningStrategy: {
-          ...DEMO_COUNTERFACTUAL.scenario.winningStrategy,
-          dte: dteDays,
-        },
-      },
-    };
-  }
-
-  async dispatchMandate(
-    mandate: string,
-    onProgress?: (step: MandatePipelineStep) => void
-  ): Promise<{ operationId: string; decisionId: string }> {
-    const opId = `OP-${Math.floor(1000 + Math.random() * 9000)}`;
-    const decId = `DEC-SPY-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    if (onProgress) {
-      setTimeout(() => {
-        onProgress({
-          id: 'step-1',
-          title: 'Fetching market context',
-          status: 'COMPLETE',
-          durationMs: 120,
-          outputSummary: ['OK: SPY 645.31', 'OK: VIX 18.2'],
-        });
-      }, 200);
-
-      setTimeout(() => {
-        onProgress({
-          id: 'step-2',
-          title: 'Reading option surface',
-          status: 'ACTIVE',
-        });
-      }, 400);
-    }
-
-    return { operationId: opId, decisionId: decId };
-  }
 }
 
 /**
@@ -229,19 +64,11 @@ class HttpSseApiAdapter implements ApiClient {
   }
 
   async getTelemetry(): Promise<TelemetryStatus> {
-    try {
-      return await this.fetchJson<TelemetryStatus>('/telemetry');
-    } catch {
-      return { ...DEMO_TELEMETRY, timestamp: new Date().toLocaleTimeString('en-US') + ' EST' };
-    }
+    return this.fetchJson<TelemetryStatus>('/telemetry');
   }
 
   async getPortfolio(): Promise<PortfolioSummary> {
-    try {
-      return await this.fetchJson<PortfolioSummary>('/portfolio');
-    } catch {
-      return new MockApiAdapter().getPortfolio();
-    }
+    return this.fetchJson<PortfolioSummary>('/portfolio');
   }
 
   async getDecision(id: string): Promise<DecisionPacket> {
@@ -277,7 +104,21 @@ class HttpSseApiAdapter implements ApiClient {
   }
 
   async getActiveOperation(): Promise<ActiveOperationState> {
-    return DEMO_ACTIVE_OPERATION;
+    return {
+      operationId: 'OP-LIVE',
+      mandate: 'Enter mandate to initiate live multi-agent options tournament on Alpaca Paper.',
+      underlying: 'SPY',
+      status: 'IDLE',
+      currentStepIndex: 0,
+      steps: [
+        { id: 'step-1', title: '01. Researcher Agent: Market Regime', status: 'PENDING' },
+        { id: 'step-2', title: '02. Volatility Analyst: Skew & Surface', status: 'PENDING' },
+        { id: 'step-3', title: '03. Strategy Tournament: Lognormal POP', status: 'PENDING' },
+        { id: 'step-4', title: '04. Critic Agent: Tail-Risk Scenarios', status: 'PENDING' },
+        { id: 'step-5', title: '05. Deterministic Risk Compiler Gate', status: 'PENDING' },
+        { id: 'step-6', title: '06. Alpaca Paper MLEG Dispatch', status: 'PENDING' },
+      ],
+    };
   }
 
   async getHistoricalDecisions(): Promise<HistoricalDecisionSummary[]> {
@@ -307,13 +148,14 @@ class HttpSseApiAdapter implements ApiClient {
             if (parsed.stage) {
               const stepMap: Record<string, string> = {
                 INIT: 'step-1',
-                DATA_FETCH: 'step-2',
-                RESEARCH: 'step-3',
-                VOLATILITY: 'step-4',
-                STRATEGY: 'step-5',
-                CRITIC: 'step-6',
-                RISK: 'step-7',
-                COMPLETE: 'step-7',
+                DATA_FETCH: 'step-1',
+                RESEARCH: 'step-1',
+                VOLATILITY: 'step-2',
+                STRATEGY: 'step-3',
+                CRITIC: 'step-4',
+                RISK: 'step-5',
+                EXECUTION: 'step-6',
+                COMPLETE: 'step-6',
               };
               const stepId = stepMap[parsed.stage] || 'step-1';
               onProgress({
@@ -342,10 +184,13 @@ class HttpSseApiAdapter implements ApiClient {
       // 2. Notify final progress completion
       if (onProgress) {
         onProgress({
-          id: 'step-7',
-          title: 'Decision Complete',
+          id: 'step-6',
+          title: 'Execution Complete on Alpaca Paper',
           status: 'COMPLETE',
-          outputSummary: [`Winner: ${packet.strategy.name}`, `Score: ${packet.strategy.score.toFixed(1)}`],
+          outputSummary: [
+            `Strategy: ${packet.strategy?.name || 'Selected Structure'}`,
+            `Status: ${packet.status} -> Dispatched to Alpaca`,
+          ],
         });
       }
 
@@ -361,6 +206,5 @@ class HttpSseApiAdapter implements ApiClient {
   }
 }
 
-// Config-based singleton export: Default strictly to LIVE backend (HttpSseApiAdapter)
-const useMocks = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
-export const api: ApiClient = useMocks ? new MockApiAdapter() : new HttpSseApiAdapter();
+// Export strictly the LIVE HttpSseApiAdapter
+export const api: ApiClient = new HttpSseApiAdapter();
