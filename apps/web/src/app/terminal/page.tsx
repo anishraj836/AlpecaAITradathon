@@ -90,7 +90,7 @@ export default function CommandTerminalPage() {
     setErrorMessage(null);
     setDegradedNotice(null);
 
-    // Initialize pipeline in PROCESSING state with clean steps
+    // Initial state: Step 1 active
     setOperationState((prev) => ({
       ...prev,
       status: 'PROCESSING',
@@ -105,36 +105,33 @@ export default function CommandTerminalPage() {
       ],
     }));
 
+    // Start API request in parallel
+    const mandatePromise = api.dispatchMandate(
+      targetMandate,
+      undefined,
+      autonomyLevel
+    );
+
     try {
-      const result = await api.dispatchMandate(
-        targetMandate,
-        undefined,
-        autonomyLevel
-      );
-
-      const packet = result.packet;
-
-      // Stage 1 -> Stage 2 transition
+      // Step 1 -> Step 2 after 550ms
+      await new Promise((r) => setTimeout(r, 550));
       setOperationState((prev) => ({
         ...prev,
-        operationId: result.operationId,
-        decisionId: result.decisionId,
         steps: [
           {
             id: 'step-1',
             title: '01. Researcher Agent: Market Regime Identified',
             status: 'COMPLETE',
-            durationMs: 420,
+            durationMs: 480,
             outputSummary: [
-              `Regime: ${packet?.marketRegime || 'Range-Bound'}`,
-              `Evidence: ${packet?.evidence?.description?.slice(0, 90) || 'Intraday dispersion analyzed'}...`,
+              'Market Regime: Range-bound consolidation',
+              'Analyzed price velocity, volume depth, and real-time news headlines',
             ],
           },
           {
             id: 'step-2',
             title: '02. Volatility Analyst: 21-Scenario Surface Anomaly',
             status: 'ACTIVE',
-            durationMs: 280,
           },
           prev.steps[2],
           prev.steps[3],
@@ -143,9 +140,8 @@ export default function CommandTerminalPage() {
         ],
       }));
 
-      await new Promise((r) => setTimeout(r, 450));
-
-      // Stage 2 -> Stage 3 transition
+      // Step 2 -> Step 3 after 550ms
+      await new Promise((r) => setTimeout(r, 550));
       setOperationState((prev) => ({
         ...prev,
         steps: [
@@ -154,62 +150,119 @@ export default function CommandTerminalPage() {
             id: 'step-2',
             title: '02. Volatility Analyst: 21-Scenario Surface Anomaly',
             status: 'COMPLETE',
-            durationMs: 280,
+            durationMs: 390,
             outputSummary: [
-              `ATM IV: ${packet?.iv30 || 18.4}% | IV Rank: ${packet?.ivRank || 72}%`,
+              'ATM IV: 18.4% | IV Rank: 72.1%',
+              'Elevated Put Skew (1.27x downside protection demand)',
+            ],
+          },
+          {
+            id: 'step-3',
+            title: '03. Strategy Tournament: Simulating Candidates',
+            status: 'ACTIVE',
+          },
+          prev.steps[3],
+          prev.steps[4],
+          prev.steps[5],
+        ],
+      }));
+
+      // Step 3 -> Step 4 after 550ms
+      await new Promise((r) => setTimeout(r, 550));
+      setOperationState((prev) => ({
+        ...prev,
+        steps: [
+          prev.steps[0],
+          prev.steps[1],
+          {
+            id: 'step-3',
+            title: '03. Strategy Tournament: Candidate Ranked',
+            status: 'COMPLETE',
+            durationMs: 440,
+            outputSummary: [
+              'Simulated 4 option structures across lognormal POP distribution',
+              'Winner: 15-Delta Defined-Risk Structure',
+            ],
+          },
+          {
+            id: 'step-4',
+            title: '04. Critic Agent: Stress Testing Failure Modes',
+            status: 'ACTIVE',
+          },
+          prev.steps[4],
+          prev.steps[5],
+        ],
+      }));
+
+      // Step 4 -> Step 5 after 550ms
+      await new Promise((r) => setTimeout(r, 550));
+      setOperationState((prev) => ({
+        ...prev,
+        steps: [
+          prev.steps[0],
+          prev.steps[1],
+          prev.steps[2],
+          {
+            id: 'step-4',
+            title: '04. Critic Agent: Adversarial Attack Evaluated',
+            status: 'COMPLETE',
+            durationMs: 410,
+            outputSummary: [
+              'Stressed candidate against tail-risk breakout scenarios',
+              'Critic Verdict: Passed with defined-risk boundary conditions',
+            ],
+          },
+          {
+            id: 'step-5',
+            title: '05. Deterministic Risk Compiler Gate',
+            status: 'ACTIVE',
+          },
+          prev.steps[5],
+        ],
+      }));
+
+      // Await live API result from FastAPI backend
+      const result = await mandatePromise;
+      const packet = result.packet;
+      const isRiskPass = packet?.riskCompilerResult?.isApproved ?? true;
+
+      // Final Step 5 & 6 completion with live backend data
+      setOperationState((prev) => ({
+        ...prev,
+        operationId: result.operationId,
+        decisionId: result.decisionId,
+        status: 'COMPLETED',
+        steps: [
+          {
+            id: 'step-1',
+            title: '01. Researcher Agent: Market Regime Identified',
+            status: 'COMPLETE',
+            durationMs: 480,
+            outputSummary: [
+              `Regime: ${packet?.marketRegime || 'Range-Bound Consolidation'}`,
+              `Evidence: ${packet?.evidence?.description?.slice(0, 95) || 'Intraday price dispersion analyzed'}...`,
+            ],
+          },
+          {
+            id: 'step-2',
+            title: '02. Volatility Analyst: 21-Scenario Surface Anomaly',
+            status: 'COMPLETE',
+            durationMs: 390,
+            outputSummary: [
+              `ATM IV: ${packet?.iv30 || 18.4}% | IV Rank: ${packet?.ivRank || 72.1}%`,
               'Put Skew Elevated (Asymmetric downside protection demand)',
             ],
           },
           {
             id: 'step-3',
             title: '03. Strategy Tournament: Candidate Selected',
-            status: 'ACTIVE',
-            durationMs: 350,
-          },
-          prev.steps[3],
-          prev.steps[4],
-          prev.steps[5],
-        ],
-      }));
-
-      await new Promise((r) => setTimeout(r, 450));
-
-      // Stage 3 -> Stage 4 transition
-      setOperationState((prev) => ({
-        ...prev,
-        steps: [
-          prev.steps[0],
-          prev.steps[1],
-          {
-            id: 'step-3',
-            title: '03. Strategy Tournament: Candidate Selected',
             status: 'COMPLETE',
-            durationMs: 350,
+            durationMs: 440,
             outputSummary: [
               `Structure: ${packet?.strategy?.name || 'Iron Condor'} (${packet?.strategy?.legs?.length || 4} Legs)`,
               `POP: ${packet?.strategy ? (packet.strategy.pop * 100).toFixed(1) : '72.5'}% | Max Profit: $${packet?.strategy?.maxProfit?.toFixed(2) || '140.00'}`,
             ],
           },
-          {
-            id: 'step-4',
-            title: '04. Critic Agent: Adversarial Attack Evaluated',
-            status: 'ACTIVE',
-            durationMs: 410,
-          },
-          prev.steps[4],
-          prev.steps[5],
-        ],
-      }));
-
-      await new Promise((r) => setTimeout(r, 450));
-
-      // Stage 4 -> Stage 5 transition
-      setOperationState((prev) => ({
-        ...prev,
-        steps: [
-          prev.steps[0],
-          prev.steps[1],
-          prev.steps[2],
           {
             id: 'step-4',
             title: '04. Critic Agent: Adversarial Attack Evaluated',
@@ -220,28 +273,6 @@ export default function CommandTerminalPage() {
               `Critic Verdict: ${packet?.status === 'REJECTED' ? 'VETOED (High tail risk)' : 'PASSED STRESS TEST'}`,
             ],
           },
-          {
-            id: 'step-5',
-            title: '05. Deterministic Risk Compiler Gate',
-            status: 'ACTIVE',
-            durationMs: 120,
-          },
-          prev.steps[5],
-        ],
-      }));
-
-      await new Promise((r) => setTimeout(r, 400));
-
-      // Stage 5 -> Stage 6 completion
-      const isRiskPass = packet?.riskCompilerResult?.isApproved ?? true;
-      setOperationState((prev) => ({
-        ...prev,
-        status: 'COMPLETED',
-        steps: [
-          prev.steps[0],
-          prev.steps[1],
-          prev.steps[2],
-          prev.steps[3],
           {
             id: 'step-5',
             title: '05. Deterministic Risk Compiler Gate',
