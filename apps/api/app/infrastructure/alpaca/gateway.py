@@ -70,3 +70,7 @@ class BrokerGateway(ABC):
     async def get_news(self, symbol: str, limit: int = 5) -> List[dict]:
         """Retrieve latest market news headlines and catalyst summaries for a symbol."""
         return []
+
+    async def close_all_positions(self) -> dict:
+        """Liquidate all open positions in paper trading account."""
+        return {"status": "success", "closed": 0}

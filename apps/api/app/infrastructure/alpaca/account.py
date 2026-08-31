@@ -96,3 +96,15 @@ class AlpacaAccountService:
             )
             resp.raise_for_status()
             return AlpacaNormalizer.normalize_positions(resp.json())
+
+    async def close_all_positions(self) -> Dict[str, Any]:
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            return {"status": "success", "closed": 0}
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{settings.ALPACA_BASE_URL}/v2/positions",
+                headers=self.headers,
+                timeout=10.0,
+            )
+            return {"status": "success", "response": resp.json() if resp.status_code == 200 else resp.text}

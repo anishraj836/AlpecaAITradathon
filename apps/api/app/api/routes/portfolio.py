@@ -106,3 +106,8 @@ async def rebalance_portfolio(broker_gw: BrokerGateway = Depends(get_broker_gate
         summary.diversification.rating = "MAXIMAL SHARPE DIVERSIFICATION"
         summary.diversification.rebalanceRecommendation = "Rebalance executed: Assets re-weighted to 30% SPY / 25% QQQ / 20% IWM / 15% GLD / 10% Cash. Beta-weighted delta locked at +0.01."
     return summary
+
+@router.post("/close-all", response_model=PortfolioSummary)
+async def close_all_positions(broker_gw: BrokerGateway = Depends(get_broker_gateway)):
+    await broker_gw.close_all_positions()
+    return await get_portfolio_summary(broker_gw)

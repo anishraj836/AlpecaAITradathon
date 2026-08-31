@@ -463,7 +463,28 @@ export default function PortfolioPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {activePositions.length > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await api.closeAllPositions();
+                    setBasePortfolio(res);
+                    setNotification({
+                      type: 'success',
+                      message: '🧹 All open paper positions liquidated. Unrealized PnL reset to clean baseline.',
+                    });
+                  } catch (e) {
+                    console.warn('Failed to close positions:', e);
+                  }
+                }}
+                className="px-2.5 py-1 bg-error/15 border border-error/40 hover:bg-error/25 text-error text-xs font-mono font-bold rounded-sm flex items-center gap-1 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">cleaning_services</span>
+                <span>Liquidate All Legs</span>
+              </button>
+            )}
             <Link
               href="/terminal"
               className="text-xs font-mono text-primary hover:underline flex items-center gap-1"
