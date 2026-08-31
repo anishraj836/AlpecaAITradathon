@@ -9,7 +9,7 @@
 [![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
 [![Multi-Provider LLM](https://img.shields.io/badge/LLM-Gemini_%7C_OpenAI_%7C_Groq_%7C_Claude_%7C_Ollama-orange.svg)](https://github.com/anishraj836/AlpecaAITradathon)
 [![Alpaca API](https://img.shields.io/badge/Alpaca-Level_3_Options_MLEG-yellow.svg)](https://alpaca.markets/)
-[![Tests Passing](https://img.shields.io/badge/tests-47%2F47%20passing-brightgreen.svg)](https://github.com/anishraj836/AlpecaAITradathon)
+[![Tests Passing](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen.svg)](https://github.com/anishraj836/AlpecaAITradathon)
 
 > **"Find the edge. Stress the thesis. Compile the risk. Trade only what survives."**
 
