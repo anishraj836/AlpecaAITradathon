@@ -123,7 +123,7 @@ class StressReport(BaseModel):
 
 class Tag(BaseModel):
     label: str
-    variant: Literal['primary', 'secondary', 'tertiary', 'error']
+    variant: Literal['primary', 'secondary', 'tertiary', 'error', 'warning']
 
 class MetricRow(BaseModel):
     label: str

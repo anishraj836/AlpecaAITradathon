@@ -279,7 +279,8 @@ def _find_chain_contract(
     opt_type: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Search real Alpaca option chain for the contract with matching type and closest strike.
+    Search real Alpaca option chain for the contract with matching type and exact strike.
+    Enforces strict tolerance (<= 0.05) to protect spread geometry and defined-risk boundaries.
     """
     if not chain:
         return None
@@ -290,9 +291,9 @@ def _find_chain_contract(
     ]
     if not matching:
         return None
-    # Find contract with strike closest to requested strike (within $10 tolerance)
+    # Find exact matching contract (within $0.05 tolerance)
     closest = min(matching, key=lambda c: abs(float(c.get("strike", 0.0)) - strike))
-    if abs(float(closest.get("strike", 0.0)) - strike) <= 10.0:
+    if abs(float(closest.get("strike", 0.0)) - strike) <= 0.05:
         return closest
     return None
 
