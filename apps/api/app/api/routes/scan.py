@@ -24,11 +24,13 @@ async def run_scan_mandate(
     broker_gw = Depends(get_broker_gateway),
     quant_gw = Depends(get_quant_gateway),
 ):
+    from app.main import extract_symbol_from_mandate
     orchestrator = VoltronOrchestrator(broker_gw, quant_gw, session)
     try:
+        target_symbol = extract_symbol_from_mandate(req.mandate, req.underlying)
         packet = await orchestrator.execute_mandate(
             mandate=req.mandate,
-            symbol=req.underlying or "SPY",
+            symbol=target_symbol,
             autonomy_level=req.autonomyLevel,
         )
         return packet

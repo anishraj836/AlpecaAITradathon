@@ -91,14 +91,15 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
         const y = ((dte - minDte) / (maxDte - minDte) - 0.5) * 300;
 
         const iv = computeIV(strike, dte);
-        // Scale IV to Z-height: [0, 140]
-        const z = (iv - 14.0) * 4.4;
+        // Dynamic relative Z-height scaled to ticker's ATM baseline
+        const atmBase = (surfaceData.skewSnapshot?.atmIV || 18.2) - 6.0;
+        const z = Math.max(0, (iv - atmBase) * 4.8);
 
         grid[i][j] = { x, y, z, strike, dte, iv };
       }
     }
     return grid;
-  }, [computeIV, minStrike, maxStrike, minDte, maxDte]);
+  }, [computeIV, minStrike, maxStrike, minDte, maxDte, surfaceData.skewSnapshot?.atmIV]);
 
   // Main Render Loop
   const renderSurface = useCallback(() => {
@@ -122,7 +123,7 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
     const cosY = Math.cos(radY);
     const sinY = Math.sin(radY);
 
-    // 3D rotation & perspective transformation
+    // 3D Perspective Projection Function
     const project = (p: Point3D) => {
       // 1. Rotate Y (Yaw)
       const x1 = p.x * cosY + p.y * sinY;
@@ -173,6 +174,11 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
       return projA.depth - projB.depth;
     });
 
+    // Compute relative min and max IV across quads for smooth heat gradient
+    const minQuadIv = quads.length > 0 ? Math.min(...quads.map((q) => q.avgIv)) : 15.0;
+    const maxQuadIv = quads.length > 0 ? Math.max(...quads.map((q) => q.avgIv)) : 35.0;
+    const ivRange = Math.max(maxQuadIv - minQuadIv, 2.0);
+
     // 1. Draw 3D Base Reference Grid
     ctx.strokeStyle = 'rgba(59, 73, 76, 0.35)';
     ctx.lineWidth = 1;
@@ -191,24 +197,24 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
     }
     ctx.stroke();
 
-    // 2. Draw 3D Surface Polygons with IV Height Color Shading
+    // 2. Draw 3D Surface Polygons with Relative IV Height Color Shading (Cyan -> Gold -> Crimson)
     for (const quad of quads) {
       const proj1 = project(quad.p1);
       const proj2 = project(quad.p2);
       const proj3 = project(quad.p3);
       const proj4 = project(quad.p4);
 
-      // Color mapping: Cyan (< 20%) -> Yellow (20-28%) -> Crimson (> 28%)
-      const normIv = (quad.avgIv - 16.0) / 16.0;
-      let fillColor = 'rgba(0, 229, 255, 0.22)';
-      let strokeColor = 'rgba(0, 229, 255, 0.55)';
+      // Relative normalization between 0.0 (valley) and 1.0 (peak skew)
+      const relNorm = (quad.avgIv - minQuadIv) / ivRange;
+      let fillColor = 'rgba(0, 229, 255, 0.25)'; // Low / ATM valley: Cyan
+      let strokeColor = 'rgba(0, 229, 255, 0.65)';
 
-      if (normIv > 0.55) {
-        fillColor = 'rgba(255, 75, 75, 0.38)'; // High Put Skew Spike
-        strokeColor = 'rgba(255, 100, 100, 0.85)';
-      } else if (normIv > 0.25) {
-        fillColor = 'rgba(254, 201, 49, 0.28)'; // Elevated Vol Zone
-        strokeColor = 'rgba(254, 201, 49, 0.7)';
+      if (relNorm > 0.62) {
+        fillColor = 'rgba(255, 75, 75, 0.42)'; // Peak skew spike: Crimson Red
+        strokeColor = 'rgba(255, 100, 100, 0.90)';
+      } else if (relNorm > 0.32) {
+        fillColor = 'rgba(254, 201, 49, 0.30)'; // Mid vol slope: Amber Gold
+        strokeColor = 'rgba(254, 201, 49, 0.75)';
       }
 
       ctx.fillStyle = fillColor;

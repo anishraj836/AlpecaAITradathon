@@ -214,9 +214,37 @@ class HttpSseApiAdapter implements ApiClient {
     }
 
     try {
-      // 1. Dynamically extract target ticker symbol from mandate if present
-      const symbolMatch = mandate.match(/\b(QQQ|NVDA|AAPL|TSLA|IWM|MSFT|AMZN|META|AMD|SPY)\b/i);
-      const targetSymbol = symbolMatch ? symbolMatch[1].toUpperCase() : 'SPY';
+      // 1. Dynamically extract target ticker symbol from mandate for ANY stock
+      const STOP_WORDS = new Set([
+        'BUY', 'SELL', 'CALL', 'PUT', 'WITH', 'RISK', 'FOR', 'THE', 'SCAN', 'RUN', 'MODE',
+        'AUTO', 'TRADE', 'DELTA', 'WING', 'SKEW', 'IRON', 'SPREAD', 'CONDOR', 'CREDIT',
+        'DEBIT', 'HIGH', 'LOW', 'LONG', 'SHORT', 'AND', 'OUT', 'IN', 'TO', 'ON', 'FIND',
+        'LOOK', 'OPEN', 'CLOSE', 'EXIT', 'STOP', 'LOSS', 'TARGET', 'MAX', 'MIN', 'RATE',
+        'VOL', 'DAYS', 'DTE', 'CASH', 'BASKET', 'STOCK', 'STOCKS', 'OPTION', 'OPTIONS',
+        'LEGS', 'LEG', 'ENTRY', 'MARK', 'TIME', 'PRICE', 'GAIN', 'WIN', 'DROP', 'SHOCK',
+        'CRASH', 'AI', 'MCP', 'HARVEST', 'SEEK', 'BUILD', 'NEUTRAL', 'BETA', 'ANALYZE'
+      ]);
+
+      let targetSymbol = 'SPY';
+      // Preposition search (e.g. 'on PLTR', 'for TSLA', 'symbol AMD')
+      const prepMatch = mandate.match(/\b(?:on|for|in|stock|symbol|ticker|analyze|harvest|trade)\s+([A-Za-z]{1,6})\b/i);
+      if (prepMatch && !STOP_WORDS.has(prepMatch[1].toUpperCase())) {
+        targetSymbol = prepMatch[1].toUpperCase();
+      } else {
+        // Uppercase search
+        const upperMatches = mandate.match(/\b[A-Z]{2,6}\b/g) || [];
+        const validUpper = upperMatches.find((tok) => !STOP_WORDS.has(tok));
+        if (validUpper) {
+          targetSymbol = validUpper;
+        } else {
+          // Known high-liquidity symbols
+          const knownList = ['PLTR', 'COIN', 'SMCI', 'AMD', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'QQQ', 'IWM', 'SPY', 'ARM', 'DIS', 'NFLX', 'UBER', 'BABA', 'BA', 'GLD', 'TLT'];
+          const foundKnown = knownList.find((k) => new RegExp(`\\b${k}\\b`, 'i').test(mandate));
+          if (foundKnown) {
+            targetSymbol = foundKnown;
+          }
+        }
+      }
 
       // Submit mandate to FastAPI /api/scan endpoint
       const packet = await this.fetchJson<DecisionPacket>('/scan', {

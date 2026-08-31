@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Optional, List, Dict, Any, Set
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Trading stop words to filter out when extracting ticker symbols
+TRADING_STOP_WORDS = {
+    "BUY", "SELL", "CALL", "PUT", "WITH", "RISK", "FOR", "THE", "SCAN", "RUN", "MODE",
+    "AUTO", "TRADE", "DELTA", "WING", "SKEW", "IRON", "SPREAD", "CONDOR", "CREDIT",
+    "DEBIT", "HIGH", "LOW", "LONG", "SHORT", "AND", "OUT", "IN", "TO", "ON", "FIND",
+    "LOOK", "OPEN", "CLOSE", "EXIT", "STOP", "LOSS", "TARGET", "MAX", "MIN", "RATE",
+    "VOL", "DAYS", "DTE", "CASH", "BASKET", "STOCK", "STOCKS", "OPTION", "OPTIONS",
+    "LEGS", "LEG", "ENTRY", "MARK", "TIME", "PRICE", "GAIN", "WIN", "DROP", "SHOCK",
+    "CRASH", "AI", "MCP", "HARVEST", "SEEK", "BUILD", "NEUTRAL", "BETA", "ANALYZE"
+}
+
+def extract_symbol_from_mandate(mandate: str, explicit: Optional[str] = None) -> str:
+    if explicit and explicit.upper() != "SPY":
+        return explicit.strip().upper()
+    if not mandate:
+        return explicit.upper() if explicit else "SPY"
+    import re
+    # 1. Preposition match (e.g. 'on PLTR', 'for NVDA', 'symbol AMD')
+    m_prep = re.search(r"\b(?:on|for|in|stock|symbol|ticker|analyze|harvest|trade)\s+([A-Za-z]{1,6})\b", mandate, re.IGNORECASE)
+    if m_prep:
+        candidate = m_prep.group(1).upper()
+        if candidate not in TRADING_STOP_WORDS:
+            return candidate
+    # 2. Uppercase tokens
+    for tok in re.findall(r"\b[A-Z]{2,6}\b", mandate):
+        if tok not in TRADING_STOP_WORDS:
+            return tok
+    # 3. Known high-liquidity symbols (case-insensitive)
+    known = {"PLTR", "COIN", "SMCI", "AMD", "NVDA", "AAPL", "TSLA", "MSFT", "AMZN", "META", "GOOGL", "GOOG", "QQQ", "IWM", "SPY", "ARM", "DIS", "NFLX", "AVGO", "UBER", "BABA", "BA", "GLD", "TLT"}
+    for w in re.findall(r"\b[A-Za-z]{2,6}\b", mandate):
+        if w.upper() in known:
+            return w.upper()
+    return explicit.upper() if explicit else "SPY"
+
 # Direct root scan endpoint (/api/scan)
 @app.post(f"{settings.API_PREFIX}/scan", response_model=DecisionPacket, tags=["Mandates"])
 async def run_mandate_scan(
@@ -45,13 +80,7 @@ async def run_mandate_scan(
 ):
     orchestrator = VoltronOrchestrator(broker_gw, quant_gw, session)
     try:
-        target_symbol = req.underlying or "SPY"
-        if target_symbol == "SPY" and req.mandate:
-            import re
-            m = re.search(r"\b(QQQ|NVDA|AAPL|TSLA|IWM|MSFT|AMZN|META|AMD|SPY)\b", req.mandate, re.IGNORECASE)
-            if m:
-                target_symbol = m.group(1).upper()
-
+        target_symbol = extract_symbol_from_mandate(req.mandate, req.underlying)
         return await orchestrator.execute_mandate(
             mandate=req.mandate,
             symbol=target_symbol,
