@@ -219,6 +219,91 @@ export default function CommandTerminalPage() {
               </div>
             </div>
 
+            {/* Guided Missile: 1-Click Interactive Demo Storylines */}
+            <div className="mb-6 flex flex-col gap-2 max-w-2xl">
+              <div className="flex items-center justify-between">
+                <span className="font-label-xs text-label-xs text-primary uppercase tracking-widest flex items-center gap-1.5 font-bold">
+                  <span className="material-symbols-outlined text-[14px]">play_circle</span>
+                  Interactive Demo Scenarios (1-Click Guided Run)
+                </span>
+                <span className="text-[10px] text-on-surface-variant font-mono">Instant End-to-End Simulation</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                {/* Scenario 1 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = 'Harvest SPY 15-Delta Put Skew with Defined Risk';
+                    setMandate(m);
+                    setAutonomyLevel('GUARDED_AUTONOMOUS');
+                    handleExecuteMandate(m);
+                  }}
+                  disabled={isSubmitting}
+                  className="p-3 bg-surface border border-primary/40 hover:border-primary hover:bg-primary/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-mono uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">
+                      ⚡ Scenario A
+                    </span>
+                    <span className="text-[10px] text-primary group-hover:translate-x-0.5 transition-transform font-bold">Run ▶</span>
+                  </div>
+                  <div className="font-bold text-xs text-on-surface mb-1">Trade Survived Debate</div>
+                  <div className="text-[10px] text-on-surface-variant leading-snug">
+                    Agents debate skew vs momentum, synthesize 15Δ condor, and pass Alpaca MLEG gate.
+                  </div>
+                </button>
+
+                {/* Scenario 2 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = 'Aggressive unhedged short volatility on high-beta earnings catalyst';
+                    setMandate(m);
+                    setAutonomyLevel('GUARDED_AUTONOMOUS');
+                    handleExecuteMandate(m);
+                  }}
+                  disabled={isSubmitting}
+                  className="p-3 bg-surface border border-error/40 hover:border-error hover:bg-error/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-mono uppercase bg-error/20 text-error px-1.5 py-0.5 rounded font-bold">
+                      🛑 Scenario B
+                    </span>
+                    <span className="text-[10px] text-error group-hover:translate-x-0.5 transition-transform font-bold">Run ▶</span>
+                  </div>
+                  <div className="font-bold text-xs text-on-surface mb-1">Trade Died in Committee</div>
+                  <div className="text-[10px] text-on-surface-variant leading-snug">
+                    Critic attacks unhedged thesis, triggers Quant Gate violation, and enforces NO-TRADE.
+                  </div>
+                </button>
+
+                {/* Scenario 3 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = 'Scan macro breakout on SPY during network latency';
+                    setMandate(m);
+                    setAutonomyLevel('AUTOPILOT');
+                    handleExecuteMandate(m);
+                  }}
+                  disabled={isSubmitting}
+                  className="p-3 bg-surface border border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-mono uppercase bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">
+                      🚨 Scenario C
+                    </span>
+                    <span className="text-[10px] text-amber-400 group-hover:translate-x-0.5 transition-transform font-bold">Run ▶</span>
+                  </div>
+                  <div className="font-bold text-xs text-on-surface mb-1">Safety Demotion Mode</div>
+                  <div className="text-[10px] text-on-surface-variant leading-snug">
+                    AI degradation triggers Radical Transparency; automatically locks autonomy to Copilot.
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* Error & Degraded Notices */}
             {errorMessage && (
               <div className="mb-6 bg-error-container/20 border border-error/50 text-error px-4 py-3 rounded-sm flex items-center justify-between font-mono text-sm">
