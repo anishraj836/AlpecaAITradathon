@@ -27,13 +27,6 @@ interface Quad3D {
   dteMid: number;
 }
 
-const DEFAULT_STRATEGY_LEGS = [
-  { strike: 625, type: 'PUT', action: 'BUY WING', color: '#00e5ff' },
-  { strike: 630, type: 'PUT', action: 'SELL SHORT', color: '#ff5050' },
-  { strike: 660, type: 'CALL', action: 'SELL SHORT', color: '#fec931' },
-  { strike: 665, type: 'CALL', action: 'BUY WING', color: '#00e5ff' },
-];
-
 export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceData }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -47,26 +40,40 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
   const [showStrategyOverlay, setShowStrategyOverlay] = useState<boolean>(true);
   const [hoveredPoint, setHoveredPoint] = useState<{ strike: number; dte: number; iv: number; screenX: number; screenY: number } | null>(null);
 
-  // Grid Resolution
+  // Dynamic Spot Price and Strike Scaling for ANY ticker
+  const spotPrice = surfaceData.spotPrice || 645.31;
   const numStrikes = 18;
   const numDtes = 14;
-  const minStrike = 615;
-  const maxStrike = 675;
+  const minStrike = Math.max(1.0, spotPrice * 0.82);
+  const maxStrike = spotPrice * 1.18;
   const minDte = 7;
   const maxDte = 60;
-  const spotPrice = surfaceData.spotPrice || 645.31;
+
+  // Dynamic Strategy Leg Overlays scaled to ticker spot price
+  const step = spotPrice >= 300 ? 5 : spotPrice >= 100 ? 2.5 : spotPrice >= 30 ? 1 : 0.5;
+  const shortPutStrike = Math.round((spotPrice * 0.95) / step) * step;
+  const longPutStrike = shortPutStrike - step * 2;
+  const shortCallStrike = Math.round((spotPrice * 1.05) / step) * step;
+  const longCallStrike = shortCallStrike + step * 2;
+
+  const strategyLegs = [
+    { strike: longPutStrike, type: 'PUT', action: 'BUY WING', color: '#00e5ff' },
+    { strike: shortPutStrike, type: 'PUT', action: 'SELL SHORT', color: '#ff5050' },
+    { strike: shortCallStrike, type: 'CALL', action: 'SELL SHORT', color: '#fec931' },
+    { strike: longCallStrike, type: 'CALL', action: 'BUY WING', color: '#00e5ff' },
+  ];
 
   // Compute IV at a given strike and DTE
   const computeIV = useCallback((k: number, dte: number) => {
-    const moneyness = (k - spotPrice) / spotPrice;
+    const moneyness = (k - spotPrice) / Math.max(spotPrice, 1.0);
     // Volatility smile + skew + term structure
     const termFactor = Math.sqrt(30 / Math.max(dte, 1)) * 1.8;
     const skewFactor = moneyness < 0 
-      ? Math.pow(moneyness * 100, 2) * 0.085 - moneyness * 36
-      : Math.pow(moneyness * 100, 2) * 0.035;
-    const baseIV = 18.2 + termFactor + skewFactor;
-    return Math.max(13.0, Math.min(44.0, baseIV));
-  }, [spotPrice]);
+      ? Math.pow(moneyness * 10, 2) * 0.85 - moneyness * 16.0
+      : Math.pow(moneyness * 10, 2) * 0.45;
+    const baseIV = (surfaceData.skewSnapshot?.atmIV || 18.2) + termFactor + skewFactor;
+    return Math.max(10.0, Math.min(65.0, baseIV));
+  }, [spotPrice, surfaceData.skewSnapshot?.atmIV]);
 
   // Generate 3D grid vertices
   const generateMesh = useCallback(() => {
@@ -91,7 +98,7 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
       }
     }
     return grid;
-  }, [computeIV]);
+  }, [computeIV, minStrike, maxStrike, minDte, maxDte]);
 
   // Main Render Loop
   const renderSurface = useCallback(() => {
@@ -220,7 +227,7 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
 
     // 3. Draw Strategy Leg Overlays (Active Iron Condor on 3D Surface)
     if (showStrategyOverlay) {
-      for (const leg of DEFAULT_STRATEGY_LEGS) {
+      for (const leg of strategyLegs) {
         const legX = ((leg.strike - minStrike) / (maxStrike - minStrike) - 0.5) * 340;
         const legIv = computeIV(leg.strike, 45); // 45 DTE target
         const legZ = (legIv - 14.0) * 4.4;

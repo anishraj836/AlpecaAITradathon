@@ -82,7 +82,7 @@ export default function VolatilitySurfacePage() {
 
               {/* Quick Chips */}
               <div className="hidden xl:flex items-center gap-1 bg-surface p-0.5 border border-outline-variant/30 rounded-sm">
-                {QUICK_SYMBOLS.slice(0, 5).map((sym) => (
+                {QUICK_SYMBOLS.slice(0, 11).map((sym) => (
                   <button
                     key={sym}
                     type="button"
@@ -154,34 +154,59 @@ export default function VolatilitySurfacePage() {
             {viewMode === 'HEATMAP' && (
               <div className="w-full h-full p-8 flex flex-col justify-center max-w-2xl">
                 <h4 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-4">
-                  Strike vs DTE Implied Volatility Heatmap
+                  {surfaceData.underlying} (${surfaceData.spotPrice.toFixed(2)}) Strike vs DTE Implied Volatility Heatmap
                 </h4>
-                <div className="grid grid-cols-6 gap-1 bg-surface-container-lowest p-2 border border-outline-variant/30">
-                  <div className="p-2 text-label-xs font-label-xs text-outline font-mono">DTE \ K</div>
-                  {['620', '630', '645', '660', '670'].map((k) => (
-                    <div key={k} className="p-2 text-center font-data-sm text-data-sm text-on-surface font-mono">
-                      ${k}
+                {(() => {
+                  const strikeStep = surfaceData.spotPrice >= 300 ? 5 : surfaceData.spotPrice >= 100 ? 2.5 : surfaceData.spotPrice >= 30 ? 1 : 0.5;
+                  const centerStrike = Math.round(surfaceData.spotPrice / strikeStep) * strikeStep;
+                  const heatmapStrikes = [
+                    centerStrike - strikeStep * 2,
+                    centerStrike - strikeStep,
+                    centerStrike,
+                    centerStrike + strikeStep,
+                    centerStrike + strikeStep * 2,
+                  ];
+                  return (
+                    <div className="grid grid-cols-6 gap-1 bg-surface-container-lowest p-2 border border-outline-variant/30">
+                      <div className="p-2 text-label-xs font-label-xs text-outline font-mono">DTE \ K</div>
+                      {heatmapStrikes.map((k) => (
+                        <div key={k} className="p-2 text-center font-data-sm text-data-sm text-on-surface font-mono">
+                          ${k.toFixed(1)}
+                        </div>
+                      ))}
+                      {['7D', '14D', '30D', '45D'].map((dte, dIdx) => (
+                        <React.Fragment key={dte}>
+                          <div className="p-2 font-data-sm text-data-sm text-on-surface-variant font-mono">{dte}</div>
+                          {heatmapStrikes.map((_, sIdx) => {
+                            const ivVal = (surfaceData.skewSnapshot?.atmIV || 18.2) + (sIdx === 0 ? 4.2 : sIdx === 1 ? 2.1 : sIdx === 2 ? 0.0 : sIdx === 3 ? -1.2 : -0.8) + (4 - dIdx) * 0.8;
+                            return (
+                              <div
+                                key={sIdx}
+                                className={`p-2 text-center font-mono ${
+                                  sIdx < 2
+                                    ? 'bg-error/30 text-error font-bold'
+                                    : sIdx === 2
+                                    ? 'bg-primary/20 text-primary'
+                                    : 'bg-primary/10 text-on-surface'
+                                }`}
+                              >
+                                {ivVal.toFixed(1)}%
+                              </div>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
                     </div>
-                  ))}
-                  {['7D', '14D', '30D', '45D'].map((dte) => (
-                    <React.Fragment key={dte}>
-                      <div className="p-2 font-data-sm text-data-sm text-on-surface-variant font-mono">{dte}</div>
-                      <div className="p-2 bg-error/30 text-error text-center font-mono font-bold">28.4%</div>
-                      <div className="p-2 bg-error/20 text-error text-center font-mono">26.1%</div>
-                      <div className="p-2 bg-primary/20 text-primary text-center font-mono">24.8%</div>
-                      <div className="p-2 bg-primary/10 text-on-surface text-center font-mono">22.4%</div>
-                      <div className="p-2 bg-primary/10 text-on-surface text-center font-mono">21.8%</div>
-                    </React.Fragment>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
             )}
 
             {/* Mode 3: Volatility Smile View */}
             {viewMode === 'SMILE' && (
               <div className="w-full h-full p-8 flex flex-col items-center justify-center max-w-3xl relative">
-                <h4 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-4 self-start">
-                  30D Implied Volatility Smile & Skew Curve
+                <h4 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-4 self-start font-mono">
+                  {surfaceData.underlying} (${surfaceData.spotPrice.toFixed(2)}) 30D Implied Volatility Smile & Skew Curve
                 </h4>
                 <svg className="w-full h-64 border-b border-l border-outline-variant/30 p-4" viewBox="0 0 600 200">
                   {/* Grid */}
@@ -197,17 +222,17 @@ export default function VolatilitySurfacePage() {
                   {/* Put Skew Highlight */}
                   <circle cx="150" cy="90" r="4" fill="#ffb4ab" />
                   <text x="160" y="85" fill="#ffb4ab" fontSize="11" fontFamily="JetBrains Mono">
-                    25Δ Put (27.4%)
+                    25Δ Put ({surfaceData.skewSnapshot?.put25DeltaIV?.toFixed(1) || 21.4}%)
                   </text>
                   {/* ATM */}
                   <circle cx="300" cy="150" r="4" fill="#00daf3" />
                   <text x="310" y="145" fill="#00daf3" fontSize="11" fontFamily="JetBrains Mono">
-                    ATM (23.1%)
+                    ATM ({surfaceData.skewSnapshot?.atmIV?.toFixed(1) || 18.2}%)
                   </text>
                   {/* Call Skew */}
                   <circle cx="480" cy="100" r="4" fill="#cdbdff" />
                   <text x="490" y="95" fill="#cdbdff" fontSize="11" fontFamily="JetBrains Mono">
-                    25Δ Call (21.8%)
+                    25Δ Call ({surfaceData.skewSnapshot?.call25DeltaIV?.toFixed(1) || 16.8}%)
                   </text>
                 </svg>
               </div>
