@@ -24,10 +24,31 @@ export const HeaderTelemetryBar: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Fast-hydrate from session cache to prevent any visual jump on page refresh
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('voltron_telemetry_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.underlying) {
+            setTelemetry(parsed);
+          }
+        }
+      } catch {
+        // Ignore JSON parse errors
+      }
+    }
+
     const fetchTelemetry = async () => {
       try {
         const data = await api.getTelemetry();
-        if (isMounted) setTelemetry(data);
+        if (isMounted) {
+          setTelemetry(data);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('voltron_telemetry_cache', JSON.stringify(data));
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch telemetry:', err);
       }

@@ -11,15 +11,15 @@ import {
 } from '@/types/voltron';
 
 export const DEMO_TELEMETRY: TelemetryStatus = {
-  marketStatus: 'OPEN',
+  marketStatus: 'CLOSED',
   underlying: 'SPY',
-  underlyingPrice: 645.31,
-  underlyingChangePct: 0.82,
+  underlyingPrice: 769.28,
+  underlyingChangePct: -0.25,
   accountEquity: 100000.0,
-  buyingPower: 200000.0,
+  buyingPower: 326860.0,
   alpacaConnected: true,
   isPaper: true,
-  timestamp: '10:45:12 AM EST',
+  timestamp: '08:45:00 AM EST',
 };
 
 export const DEMO_STRATEGY_CANDIDATES: StrategyCandidate[] = [
