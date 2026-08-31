@@ -53,3 +53,58 @@ class AlpacaMarketDataService:
                 )
             else:
                 return AlpacaNormalizer.normalize_market_context(symbol=symbol, price=645.31, change_pct=0.82)
+
+    async def get_clock(self) -> Dict[str, Any]:
+        """
+        Query Alpaca's live clock API to determine if market is OPEN, PRE_MARKET, or CLOSED.
+        """
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            # Deterministic test mode: open by default
+            return {
+                "is_open": True,
+                "next_open": "2026-09-01T09:30:00-04:00",
+                "next_close": "2026-09-01T16:00:00-04:00",
+                "market_status": "OPEN",
+            }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.ALPACA_BASE_URL}/v2/clock",
+                    headers=self.headers,
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    is_open = bool(data.get("is_open", False))
+                    return {
+                        "is_open": is_open,
+                        "next_open": str(data.get("next_open", "")),
+                        "next_close": str(data.get("next_close", "")),
+                        "market_status": "OPEN" if is_open else "CLOSED",
+                        "timestamp": str(data.get("timestamp", "")),
+                    }
+        except Exception:
+            pass
+
+        # Fallback to local US/Eastern timezone calculation
+        from datetime import datetime, timezone
+        try:
+            import zoneinfo
+            eastern = zoneinfo.ZoneInfo("America/New_York")
+        except Exception:
+            eastern = timezone.utc
+
+        now_est = datetime.now(eastern)
+        is_weekday = now_est.weekday() < 5
+        is_market_hours = (
+            (now_est.hour > 9 or (now_est.hour == 9 and now_est.minute >= 30))
+            and now_est.hour < 16
+        )
+        is_open = is_weekday and is_market_hours
+        return {
+            "is_open": is_open,
+            "next_open": "09:30:00 EST",
+            "next_close": "16:00:00 EST",
+            "market_status": "OPEN" if is_open else "CLOSED",
+        }

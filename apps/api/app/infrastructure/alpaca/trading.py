@@ -98,8 +98,18 @@ class AlpacaTradingService:
                 timeout=15.0,
             )
             if resp.status_code >= 400:
+                error_msg = "Order rejected by broker."
+                try:
+                    error_json = resp.json()
+                    msg = error_json.get("message", "")
+                    if "market is closed" in msg.lower() or "options trading is closed" in msg.lower():
+                        error_msg = "Market is CLOSED. Options trading is only available during regular market hours (09:30-16:00 EST)."
+                    elif msg:
+                        error_msg = f"Order rejected: {msg}"
+                except Exception:
+                    pass
+
                 logger.error(f"Alpaca Order Error ({resp.status_code}): {resp.text} | Payload: {alpaca_payload}")
-                # Parse rejection payload gracefully
                 now_dt = _utc_now()
                 return OrderResult(
                     orderId=f"ALP-REJECTED-{now_dt.strftime('%M%S')}",
@@ -109,7 +119,7 @@ class AlpacaTradingService:
                     filledAt=now_dt.isoformat() + "Z",
                     avgPrice=limit_price,
                     broker="ALPACA_PAPER",
-                    rawPayload=alpaca_payload,
+                    rawResponse={"error": error_msg, "status_code": resp.status_code, "original_payload": alpaca_payload},
                 )
             return AlpacaNormalizer.normalize_order_result(resp.json(), decision.id)
 

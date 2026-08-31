@@ -107,3 +107,6 @@ class AlpacaBrokerGateway(BrokerGateway):
 
         # 2. Fall back to official alpaca-py SDK & REST
         return await self.trading_service.get_order(order_id)
+
+    async def get_clock(self) -> dict:
+        return await self.market_service.get_clock()

@@ -14,9 +14,11 @@ class MarketService:
     async def get_telemetry(self, symbol: str = "SPY") -> TelemetryStatus:
         account = await self.broker_gateway.get_account()
         context = await self.broker_gateway.get_market_context(symbol)
+        clock = await self.broker_gateway.get_clock()
+        market_status = clock.get("market_status", "OPEN" if clock.get("is_open", True) else "CLOSED")
 
         return TelemetryStatus(
-            marketStatus="OPEN",
+            marketStatus=market_status,
             underlying=symbol.upper(),
             underlyingPrice=context.price,
             underlyingChangePct=context.changePct,

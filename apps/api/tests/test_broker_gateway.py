@@ -109,3 +109,11 @@ async def test_place_multileg_order_via_mcp_success(monkeypatch):
     assert mcp_tool_calls[0]["tool"] == "alpaca_place_multileg_order"
     assert mcp_tool_calls[0]["args"]["order_class"] == "mleg"
     assert len(mcp_tool_calls[0]["args"]["legs"]) == len(strategy.legs)
+
+@pytest.mark.asyncio
+async def test_get_clock_broker():
+    broker = AlpacaBrokerGateway()
+    clock = await broker.get_clock()
+    assert "is_open" in clock
+    assert "market_status" in clock
+    assert clock["market_status"] in ["OPEN", "CLOSED"]

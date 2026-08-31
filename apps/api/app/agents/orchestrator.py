@@ -382,6 +382,10 @@ class VoltronOrchestrator:
             )
 
             if can_auto_execute:
+                # Query Market Clock
+                clock = await self.broker.get_clock()
+                is_market_open = clock.get("is_open", True)
+
                 if is_degraded:
                     # 🚨 SAFETY DEMOTION: Never allow un-inspected fallback heuristics to execute autonomously!
                     logger.warning(f"[{decision_id}] SAFETY DEMOTION ACTIVATED: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
@@ -393,9 +397,20 @@ class VoltronOrchestrator:
                         message=f"⚠️ Safety Demotion: AI Committee was offline. Autonomous execution locked. Manual human review required.",
                         payload=packet.model_dump(),
                     )
+                elif not is_market_open:
+                    # 🚨 MARKET CLOSED SAFETY GATE: Prevent dispatching multi-leg options orders when Alpaca options gateway is closed
+                    logger.info(f"[{decision_id}] MARKET CLOSED: Market is currently closed (Next open: {clock.get('next_open')}). Autonomous order dispatch deferred to market open.")
+                    await self._emit_event(
+                        decision_id=decision_id,
+                        event_type="market_closed_held",
+                        stage="EXECUTION",
+                        status="COMPLETE",
+                        message=f"⏸️ Market Closed ({clock.get('market_status', 'CLOSED')}): Next open at {clock.get('next_open')}. Autonomous execution safely held in Decision Room to prevent broker rejection.",
+                        payload=packet.model_dump(),
+                    )
                 else:
                     from app.services.execution_service import ExecutionService
-                    logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed. Routing directly to Alpaca...")
+                    logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed and market is OPEN. Routing directly to Alpaca...")
                     exec_service = ExecutionService(self.session, self.broker)
                     order_result = await exec_service.approve_and_execute(decision_id)
                     packet.status = "APPROVED"

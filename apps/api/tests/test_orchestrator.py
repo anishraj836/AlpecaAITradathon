@@ -85,3 +85,42 @@ async def test_orchestrator_no_trade_path():
         # Assert NO-TRADE / REJECTED status
         assert packet.riskCompilerResult.isApproved is False
         assert packet.status == "REJECTED"
+
+@pytest.mark.asyncio
+async def test_orchestrator_market_closed_held(monkeypatch):
+    """
+    Verify that in autonomous mode, when the market is closed,
+    the orchestrator generates the decision but safely holds it in AWAITING_APPROVAL
+    rather than dispatching a doomed order to Alpaca.
+    """
+    broker = AlpacaBrokerGateway()
+    quant = MockOptionsIntelligenceGateway()
+
+    # Mock market clock as CLOSED
+    async def mock_get_clock():
+        return {
+            "is_open": False,
+            "next_open": "2026-09-01T09:30:00-04:00",
+            "next_close": "2026-09-01T16:00:00-04:00",
+            "market_status": "CLOSED",
+        }
+
+    monkeypatch.setattr(broker, "get_clock", mock_get_clock)
+
+    async with async_session_factory() as session:
+        orchestrator = VoltronOrchestrator(
+            broker_gateway=broker,
+            quant_gateway=quant,
+            session=session,
+        )
+
+        packet = await orchestrator.execute_mandate(
+            mandate="Autonomous mandate during closed market",
+            symbol="SPY",
+            autonomy_level="GUARDED_AUTONOMOUS",
+        )
+
+        assert packet.riskCompilerResult.isApproved is True
+        # Must be held in AWAITING_APPROVAL because market is closed
+        assert packet.status == "AWAITING_APPROVAL"
+

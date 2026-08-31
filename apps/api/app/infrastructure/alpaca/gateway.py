@@ -57,3 +57,12 @@ class BrokerGateway(ABC):
     async def get_order(self, order_id: str) -> OrderResult:
         """Retrieve status and fills for a submitted order."""
         pass
+
+    async def get_clock(self) -> dict:
+        """Retrieve market clock and open/closed status."""
+        return {
+            "is_open": True,
+            "next_open": "2026-09-01T09:30:00-04:00",
+            "next_close": "2026-09-01T16:00:00-04:00",
+            "market_status": "OPEN",
+        }
