@@ -433,7 +433,7 @@ export default function DecisionRoomPage() {
       </div>
 
       {/* Bottom Insights Row */}
-      <div className="grid grid-cols-12 gap-container-gap h-48">
+      <div className="grid grid-cols-12 gap-container-gap min-h-48">
         {/* Why This Trade */}
         <div className="col-span-4 bg-surface-container p-4 flex flex-col border-t-2 border-outline-variant/30 rounded-sm">
           <h3 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-3">
@@ -458,7 +458,7 @@ export default function DecisionRoomPage() {
           <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-[64px] text-error">warning</span>
           </div>
-          <h3 className="font-label-xs text-label-xs text-error uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <h3 className="font-label-xs text-label-xs text-error uppercase tracking-widest mb-2 flex items-center gap-1.5 font-bold">
             <span className="material-symbols-outlined text-[14px]">smart_toy</span>
             AI Critic Failure Mode Analysis
           </h3>
@@ -472,28 +472,28 @@ export default function DecisionRoomPage() {
 
         {/* Deterministic Risk Compiler */}
         <div className="col-span-4 bg-surface-container p-4 flex flex-col border-t-2 border-primary/50 rounded-sm">
-          <h3 className="font-label-xs text-label-xs text-primary uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <h3 className="font-label-xs text-label-xs text-primary uppercase tracking-widest mb-2 flex items-center gap-1.5 font-bold">
             <span className="material-symbols-outlined text-[14px]">terminal</span>
             Risk Compiler (Deterministic Pure Code)
           </h3>
           <div className="flex-1 flex flex-col justify-around font-mono">
             <div className="flex items-center justify-between text-xs">
               <span className="text-on-surface-variant font-sans">Budget Allocation</span>
-              <span className="font-data-sm text-data-sm text-primary bg-primary/10 px-2 py-0.5 ring-1 ring-primary/30 rounded-sm">
+              <span className="font-data-sm text-data-sm text-primary bg-primary/10 px-2 py-0.5 ring-1 ring-primary/30 rounded-sm font-bold">
                 {decision.riskCompilerResult.budgetCheck.valueText}
               </span>
             </div>
             <div className="w-full h-px bg-outline-variant/20" />
             <div className="flex items-center justify-between text-xs">
               <span className="text-on-surface-variant font-sans">Liquidity Check</span>
-              <span className="font-data-sm text-data-sm text-primary bg-primary/10 px-2 py-0.5 ring-1 ring-primary/30 rounded-sm">
+              <span className="font-data-sm text-data-sm text-primary bg-primary/10 px-2 py-0.5 ring-1 ring-primary/30 rounded-sm font-bold">
                 {decision.riskCompilerResult.liquidityCheck.valueText}
               </span>
             </div>
             <div className="w-full h-px bg-outline-variant/20" />
             <div className="flex items-center justify-between text-xs">
               <span className="text-on-surface-variant font-sans">Portfolio Concentration</span>
-              <span className="font-data-sm text-data-sm text-tertiary-fixed-dim bg-tertiary-fixed-dim/10 px-2 py-0.5 ring-1 ring-tertiary-fixed-dim/30 rounded-sm">
+              <span className="font-data-sm text-data-sm text-tertiary-fixed-dim bg-tertiary-fixed-dim/10 px-2 py-0.5 ring-1 ring-tertiary-fixed-dim/30 rounded-sm font-bold">
                 {decision.riskCompilerResult.concentrationCheck.valueText}
               </span>
             </div>
@@ -501,68 +501,86 @@ export default function DecisionRoomPage() {
         </div>
       </div>
 
-      {/* Action Execution Bar */}
-      <div className="bg-surface-container p-4 flex items-center justify-between border-t border-outline-variant/30 rounded-sm">
-        <div className="flex items-center gap-4">
-          <div className="relative flex h-3 w-3">
+      {/* Action Execution Bar (Sticky to bottom of viewport) */}
+      <div className="sticky bottom-2 left-0 right-0 z-40 bg-surface-container/95 backdrop-blur-md p-4 flex items-center justify-between border-2 border-outline-variant/40 rounded-sm shadow-[0_-8px_30px_rgba(0,0,0,0.6)] ring-1 ring-primary/20 mt-4">
+        <div className="flex items-center gap-3.5">
+          <div className="relative flex h-3.5 w-3.5">
             <span
               className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                 decision.status === 'APPROVED'
                   ? 'bg-primary'
                   : decision.status === 'REJECTED'
                   ? 'bg-error'
-                  : 'bg-tertiary-fixed-dim'
+                  : 'bg-amber-400'
               }`}
             />
             <span
-              className={`relative inline-flex rounded-full h-3 w-3 ${
+              className={`relative inline-flex rounded-full h-3.5 w-3.5 ${
                 decision.status === 'APPROVED'
                   ? 'bg-primary'
                   : decision.status === 'REJECTED'
                   ? 'bg-error'
-                  : 'bg-tertiary-fixed-dim'
+                  : 'bg-amber-400'
               }`}
             />
           </div>
-          <span className="font-data-md text-data-md text-on-surface uppercase tracking-widest font-mono">
-            {decision.status === 'APPROVED'
-              ? `ORDER ROUTED TO ALPACA (ORD ID: ${orderResult?.orderId || 'ALP-ORD-LIVE'})`
-              : decision.status === 'REJECTED'
-              ? 'TRADE PROPOSAL REJECTED BY TRADER'
-              : 'Waiting for Human Approval'}
-          </span>
+          <div className="flex flex-col">
+            <span className="font-data-md text-data-md text-on-surface uppercase tracking-wider font-mono font-bold">
+              {decision.status === 'APPROVED'
+                ? `ORDER ROUTED TO ALPACA (ORD ID: ${orderResult?.orderId || decision.id})`
+                : decision.status === 'REJECTED'
+                ? 'TRADE PROPOSAL REJECTED BY TRADER'
+                : 'Waiting for Human Approval'}
+            </span>
+            <span className="text-[11px] text-on-surface-variant font-mono">
+              {decision.status === 'APPROVED'
+                ? 'Execution confirmed on Alpaca Paper Trading Gateway'
+                : decision.status === 'REJECTED'
+                ? 'Order execution blocked. Capital preserved.'
+                : 'Human-in-the-Loop Governance: Review parameters before broker dispatch.'}
+            </span>
+          </div>
         </div>
 
         <div className="flex gap-4 items-center">
-          {decision.status === 'AWAITING_APPROVAL' && (
+          {decision.status !== 'APPROVED' && decision.status !== 'REJECTED' && (
             <button
               type="button"
               onClick={handleRejectOrder}
               disabled={isProcessing}
-              className="px-8 py-3 bg-transparent border border-outline-variant hover:border-error hover:text-error text-on-surface font-data-md text-data-md uppercase tracking-wider transition-all rounded-sm disabled:opacity-40"
+              className="px-6 py-3 bg-surface border border-error/50 hover:bg-error/10 hover:border-error text-error font-data-md text-data-md uppercase tracking-wider transition-all rounded-sm disabled:opacity-40 flex items-center gap-2 font-bold shadow-sm cursor-pointer"
             >
-              Reject Trade
+              <span className="material-symbols-outlined text-[18px]">cancel</span>
+              <span>Reject Trade</span>
             </button>
           )}
 
           {decision.status === 'APPROVED' ? (
             <Link
               href="/portfolio"
-              className="relative px-8 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm flex items-center gap-2 font-bold"
+              className="px-8 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all rounded-sm flex items-center gap-2 font-bold shadow-glow-primary hover:shadow-glow-primary-lg"
             >
               <span>View in Live Portfolio</span>
               <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+            </Link>
+          ) : decision.status === 'REJECTED' ? (
+            <Link
+              href="/terminal"
+              className="px-8 py-3 bg-surface border border-outline-variant hover:border-primary text-on-surface font-display-lg text-data-lg uppercase tracking-wider transition-all rounded-sm flex items-center gap-2 font-bold"
+            >
+              <span>Run New Scan in Terminal</span>
+              <span className="material-symbols-outlined text-[20px]">refresh</span>
             </Link>
           ) : (
             <button
               type="button"
               onClick={() => setShowConfirmModal(true)}
-              disabled={isProcessing || decision.status !== 'AWAITING_APPROVAL'}
-              className="relative px-12 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm disabled:opacity-40"
+              disabled={isProcessing}
+              className="relative px-10 py-3 bg-primary hover:bg-primary-fixed text-on-primary font-display-lg text-data-lg uppercase tracking-wider transition-all overflow-hidden group shadow-glow-primary hover:shadow-glow-primary-lg rounded-sm disabled:opacity-40 flex items-center gap-2 font-bold cursor-pointer"
             >
               <span className="relative z-10 flex items-center gap-2 font-bold">
                 {isProcessing ? 'Routing to Alpaca...' : 'Approve Paper Order'}
-                <span className="material-symbols-outlined text-[20px]">send</span>
+                <span className="material-symbols-outlined text-[20px] group-hover:translate-x-0.5 transition-transform">send</span>
               </span>
             </button>
           )}
