@@ -69,3 +69,29 @@ async def test_quant_endpoints():
         stress_resp = await client.get("/api/quant/stress?strategy_id=strat-condor-01")
         assert stress_resp.status_code == 200
         assert len(stress_resp.json()["matrix"]) == 21
+
+@pytest.mark.asyncio
+async def test_settings_endpoints_and_autonomy_modes():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Get Settings
+        resp = await client.get("/api/settings")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "llmProvider" in data
+        assert "availableProviders" in data
+
+        # 2. Update Autonomy to COPILOT
+        update_resp = await client.post("/api/settings", json={"autonomyLevel": "COPILOT"})
+        assert update_resp.status_code == 200
+        assert update_resp.json()["autonomyLevel"] == "COPILOT"
+
+        # 3. Verify scan under COPILOT halts at AWAITING_APPROVAL
+        scan_resp = await client.post("/api/scan", json={"mandate": "Test copilot mode", "underlying": "SPY", "autonomyLevel": "COPILOT"})
+        assert scan_resp.status_code == 200
+        scan_data = scan_resp.json()
+        assert scan_data["status"] == "AWAITING_APPROVAL"
+        assert scan_data["autonomyLevel"] == "COPILOT"
+
+        # 4. Test connection endpoint with dummy test
+        test_resp = await client.post("/api/settings/test", json={"provider": "ollama", "model": "llama3.2:3b"})
+        assert test_resp.status_code == 200

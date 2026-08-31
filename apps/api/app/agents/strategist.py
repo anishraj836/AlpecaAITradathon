@@ -66,9 +66,15 @@ class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
                 response_model=StrategySelection,
             )
             if llm_out and llm_out.selectedCandidateId in candidate_map:
+                self.last_execution_mode = "LLM_REASONING"
+                self.last_provider_name = llm_client.provider_name
+                self.last_model_name = llm_client.model_name
                 return llm_out
 
         # 2. Deterministic Fallback Engine
+        self.last_execution_mode = "HEURISTIC_FALLBACK"
+        self.last_provider_name = "Deterministic Engine"
+        self.last_model_name = "Mathematical Rules"
         # Sort valid candidates by score descending
         sorted_candidates = sorted(valid_unrejected, key=lambda c: c.score, reverse=True)
         winner = sorted_candidates[0]

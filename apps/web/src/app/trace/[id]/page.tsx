@@ -149,9 +149,17 @@ export default function AgentTracePage() {
                       <span className="font-data-md text-data-md text-on-surface bg-surface-variant px-2 py-0.5 rounded-sm font-bold">
                         {step.agentRole.replace('_', ' ')}
                       </span>
-                      {isRiskCompiler && (
+                      {isRiskCompiler ? (
                         <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-sm">
                           PURE CODE (DETERMINISTIC)
+                        </span>
+                      ) : step.executionMode === 'HEURISTIC_FALLBACK' ? (
+                        <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-sm font-mono font-bold">
+                          FALLBACK HEURISTIC (NO LLM)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-1.5 py-0.5 rounded-sm font-mono">
+                          LLM: {(step.providerName || 'GEMINI').toUpperCase()}
                         </span>
                       )}
                     </div>

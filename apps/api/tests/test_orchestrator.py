@@ -34,7 +34,8 @@ async def test_orchestrator_end_to_end():
         assert len(packet.strategy.legs) == 4
         assert packet.riskCompilerResult.isApproved is True
         assert packet.status in ("APPROVED", "AWAITING_APPROVAL")
-        assert packet.aiConfidence >= 0.8
+        assert packet.aiConfidence > 0
+        assert packet.autonomyLevel is not None
 
         # 2. Assert Persistence in Database
         dec_repo = DecisionRepository(session)

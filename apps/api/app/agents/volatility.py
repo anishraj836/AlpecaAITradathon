@@ -37,9 +37,15 @@ class VolatilityAnalystAgent(BaseAgent[VolatilitySurface, VolatilityAnalysis]):
                 response_model=VolatilityAnalysis,
             )
             if llm_out:
+                self.last_execution_mode = "LLM_REASONING"
+                self.last_provider_name = llm_client.provider_name
+                self.last_model_name = llm_client.model_name
                 return llm_out
 
         # 2. Deterministic Fallback Engine
+        self.last_execution_mode = "HEURISTIC_FALLBACK"
+        self.last_provider_name = "Deterministic Engine"
+        self.last_model_name = "Mathematical Rules"
         skew_ratio = input_data.skewSnapshot.skewRatio
         atm_iv = input_data.skewSnapshot.atmIV
         put_iv = input_data.skewSnapshot.put25DeltaIV

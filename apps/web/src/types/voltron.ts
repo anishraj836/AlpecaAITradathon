@@ -139,6 +139,9 @@ export type AgentRole =
   | 'CRITIC'
   | 'RISK_COMPILER';
 
+export type AutonomyLevel = 'COPILOT' | 'GUARDED_AUTONOMOUS' | 'AUTOPILOT';
+export type ExecutionMode = 'LLM_REASONING' | 'HEURISTIC_FALLBACK';
+
 export interface AgentTraceStep {
   id: string;
   agentRole: AgentRole;
@@ -148,7 +151,7 @@ export interface AgentTraceStep {
   status: 'PENDING' | 'ACTIVE' | 'COMPLETE' | 'FAILED';
   summary: string;
   confidenceScore?: number;
-  tags?: Array<{ label: string; variant: 'primary' | 'secondary' | 'tertiary' | 'error' }>;
+  tags?: Array<{ label: string; variant: 'primary' | 'secondary' | 'tertiary' | 'error' | 'warning' }>;
   details?: {
     keyDrivers?: string[];
     metrics?: Array<{ label: string; current: string; baseline: string }>;
@@ -156,6 +159,9 @@ export interface AgentTraceStep {
     evaluatedStructures?: Array<{ name: string; score: number; isSelected: boolean }>;
     riskMetrics?: Array<{ label: string; value: string }>;
   };
+  executionMode?: ExecutionMode;
+  providerName?: string;
+  modelName?: string;
 }
 
 export interface RiskCheckItem {
@@ -195,6 +201,11 @@ export interface DecisionPacket {
   };
   riskCompilerResult: RiskCheckResult;
   status: DecisionStatus;
+  autonomyLevel?: AutonomyLevel;
+  isDegradedMode?: boolean;
+  llmProvider?: string;
+  llmModel?: string;
+  degradedReason?: string;
   mlegOrderPayload?: {
     symbol: string;
     orderType: 'limit' | 'market';
@@ -207,6 +218,39 @@ export interface DecisionPacket {
       position_intent: OptionPositionIntent;
     }>;
   };
+}
+
+export interface SystemSettings {
+  llmProvider: string;
+  llmModel: string;
+  isApiKeyConfigured: boolean;
+  apiKeyMasked?: string;
+  autonomyLevel: AutonomyLevel;
+  availableProviders: string[];
+  availableModels: Record<string, string[]>;
+}
+
+export interface UpdateSettingsRequest {
+  llmProvider?: string;
+  llmModel?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  autonomyLevel?: AutonomyLevel;
+}
+
+export interface TestConnectionRequest {
+  provider: string;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+export interface TestConnectionResponse {
+  success: boolean;
+  provider: string;
+  model: string;
+  message: string;
+  latencyMs?: number;
 }
 
 export interface OrderResult {

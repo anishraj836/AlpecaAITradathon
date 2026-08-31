@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     VOLTRON_MCP_URL: Optional[str] = "http://localhost:8001"
     ALPACA_MCP_URL: Optional[str] = "http://localhost:8002"
     
-    # Autonomous Quant Mode (Dispatches directly to Alpaca when Risk Compiler passes)
+    # Autonomous Quant Mode & Autonomy Spectrum
     AUTONOMOUS_EXECUTION: bool = True
+    AUTONOMY_LEVEL: str = "GUARDED_AUTONOMOUS"
 
     # Multi-Provider LLM Gateway (Gemini, OpenAI, Groq, Anthropic, DeepSeek, Ollama, Custom)
     LLM_PROVIDER: str = "gemini"

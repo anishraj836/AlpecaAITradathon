@@ -29,6 +29,7 @@ async def run_scan_mandate(
         packet = await orchestrator.execute_mandate(
             mandate=req.mandate,
             symbol=req.underlying or "SPY",
+            autonomy_level=req.autonomyLevel,
         )
         return packet
     except Exception as e:

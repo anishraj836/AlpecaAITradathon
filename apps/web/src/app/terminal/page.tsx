@@ -8,18 +8,20 @@ import { ActiveOperationState, MandatePipelineStep } from '@/types/voltron';
 import { DEMO_ACTIVE_OPERATION } from '@/fixtures/voltronFixtures';
 
 const EXAMPLE_MANDATES = [
-  'Analyze SPY',
-  'Find volatility opportunities',
-  'Compare current structures',
-  'Stress-test the best trade',
+  'Harvest elevated put skew on SPY with defined risk',
+  'Find optimal NVDA delta-neutral bull spread',
+  'Capture AAPL volatility anomaly with put credit spread',
+  'Scan QQQ high-probability iron condor',
 ];
 
 export default function CommandTerminalPage() {
   const router = useRouter();
-  const [mandate, setMandate] = useState('Find me a defined-risk opportunity in SPY');
+  const [mandate, setMandate] = useState('Harvest elevated put skew on SPY with defined risk');
+  const [autonomyLevel, setAutonomyLevel] = useState<import('@/types/voltron').AutonomyLevel>('GUARDED_AUTONOMOUS');
   const [operationState, setOperationState] = useState<ActiveOperationState>(DEMO_ACTIVE_OPERATION);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [degradedNotice, setDegradedNotice] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
 
   const toggleVoiceInput = () => {
@@ -86,6 +88,7 @@ export default function CommandTerminalPage() {
     if (!targetMandate.trim() || isSubmitting) return;
     setIsSubmitting(true);
     setErrorMessage(null);
+    setDegradedNotice(null);
 
     // Initialize pipeline in PROCESSING state with clean steps
     setOperationState((prev) => ({
@@ -100,13 +103,23 @@ export default function CommandTerminalPage() {
     }));
 
     try {
-      const result = await api.dispatchMandate(targetMandate, (step: MandatePipelineStep) => {
-        setOperationState((prev) => ({
-          ...prev,
-          status: 'PROCESSING',
-          steps: prev.steps.map((s) => (s.id === step.id ? { ...s, ...step } : s)),
-        }));
-      });
+      const result = await api.dispatchMandate(
+        targetMandate,
+        (step: MandatePipelineStep) => {
+          setOperationState((prev) => ({
+            ...prev,
+            status: 'PROCESSING',
+            steps: prev.steps.map((s) => (s.id === step.id ? { ...s, ...step } : s)),
+          }));
+        },
+        autonomyLevel
+      );
+
+      if (result.packet?.isDegradedMode) {
+        setDegradedNotice(
+          '⚠️ Radical Transparency: AI Reasoning was offline. System safely demoted execution to Copilot Mode with pure deterministic math.'
+        );
+      }
 
       // Update state to completed
       setOperationState((prev) => ({
@@ -146,11 +159,67 @@ export default function CommandTerminalPage() {
             <h1 className="font-display-lg text-display-lg text-on-surface mb-2 tracking-tight">
               VOLTRON <span className="text-primary opacity-90">AI OPTIONS DECISION SYSTEM</span>
             </h1>
-            <p className="font-body-sm text-body-sm text-on-surface-variant max-w-2xl mb-8">
+            <p className="font-body-sm text-body-sm text-on-surface-variant max-w-2xl mb-6">
               Awaiting directional thesis or exploratory mandate. Multi-agent debate and pure-code risk compilation primed.
             </p>
 
-            {/* Error Message Banner */}
+            {/* Autonomy Spectrum Selector */}
+            <div className="mb-6 flex flex-col gap-2">
+              <span className="font-label-xs text-label-xs text-outline uppercase tracking-wider">
+                Execution Autonomy Spectrum
+              </span>
+              <div className="grid grid-cols-3 gap-2 max-w-2xl">
+                <button
+                  type="button"
+                  onClick={() => setAutonomyLevel('COPILOT')}
+                  className={`p-2.5 rounded border text-left transition-all ${
+                    autonomyLevel === 'COPILOT'
+                      ? 'border-amber-500 bg-amber-500/10 text-amber-300'
+                      : 'border-outline-variant/30 bg-surface-container/60 text-on-surface-variant hover:border-outline-variant'
+                  }`}
+                >
+                  <div className="font-semibold text-xs flex items-center justify-between">
+                    <span>Level 1: Copilot</span>
+                    <span className="text-[10px] font-mono opacity-80">HITL</span>
+                  </div>
+                  <div className="text-[10px] text-outline mt-0.5">Decision Room Approval Required</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAutonomyLevel('GUARDED_AUTONOMOUS')}
+                  className={`p-2.5 rounded border text-left transition-all ${
+                    autonomyLevel === 'GUARDED_AUTONOMOUS'
+                      ? 'border-primary bg-primary/10 text-primary-fixed'
+                      : 'border-outline-variant/30 bg-surface-container/60 text-on-surface-variant hover:border-outline-variant'
+                  }`}
+                >
+                  <div className="font-semibold text-xs flex items-center justify-between">
+                    <span>Level 2: Guarded Auto</span>
+                    <span className="text-[10px] font-mono text-primary">DEMO</span>
+                  </div>
+                  <div className="text-[10px] text-outline mt-0.5">Executes on 100% Risk Pass</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAutonomyLevel('AUTOPILOT')}
+                  className={`p-2.5 rounded border text-left transition-all ${
+                    autonomyLevel === 'AUTOPILOT'
+                      ? 'border-cyan-500 bg-cyan-500/10 text-cyan-300'
+                      : 'border-outline-variant/30 bg-surface-container/60 text-on-surface-variant hover:border-outline-variant'
+                  }`}
+                >
+                  <div className="font-semibold text-xs flex items-center justify-between">
+                    <span>Level 3: Autopilot</span>
+                    <span className="text-[10px] font-mono opacity-80">AGENT</span>
+                  </div>
+                  <div className="text-[10px] text-outline mt-0.5">Continuous Loop + Circuit Breaker</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Error & Degraded Notices */}
             {errorMessage && (
               <div className="mb-6 bg-error-container/20 border border-error/50 text-error px-4 py-3 rounded-sm flex items-center justify-between font-mono text-sm">
                 <div className="flex items-center gap-2">
@@ -164,6 +233,15 @@ export default function CommandTerminalPage() {
                 >
                   <span className="material-symbols-outlined text-[16px]">close</span>
                 </button>
+              </div>
+            )}
+
+            {degradedNotice && (
+              <div className="mb-6 bg-amber-950/40 border border-amber-500/50 text-amber-300 px-4 py-3 rounded-sm flex items-center justify-between font-mono text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-amber-400">warning</span>
+                  <span>{degradedNotice}</span>
+                </div>
               </div>
             )}
 
@@ -184,7 +262,7 @@ export default function CommandTerminalPage() {
                 type="text"
                 value={mandate}
                 onChange={(e) => setMandate(e.target.value)}
-                placeholder="Enter trading mandate (e.g. Find defined-risk opportunity in SPY)"
+                placeholder="Enter trading mandate (e.g. Harvest elevated put skew on SPY with defined risk)"
                 className="w-full bg-surface-container h-16 pl-12 pr-48 font-data-md text-data-md text-on-surface border border-outline-variant/30 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all rounded-sm placeholder:text-on-surface-variant/50"
               />
               

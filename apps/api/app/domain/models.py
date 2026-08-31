@@ -5,6 +5,8 @@ OptionType = Literal['CALL', 'PUT']
 PositionSide = Literal['BUY', 'SELL']
 OptionPositionIntent = Literal['buy_to_open', 'sell_to_open', 'buy_to_close', 'sell_to_close']
 AgentRole = Literal['RESEARCHER', 'VOLATILITY_ANALYST', 'STRATEGY_ANALYST', 'CRITIC', 'RISK_COMPILER']
+AutonomyLevel = Literal['COPILOT', 'GUARDED_AUTONOMOUS', 'AUTOPILOT']
+ExecutionMode = Literal['LLM_REASONING', 'HEURISTIC_FALLBACK']
 DecisionStatus = Literal[
     'CREATED',
     'ANALYZING',
@@ -155,6 +157,9 @@ class AgentTraceStep(BaseModel):
     confidenceScore: Optional[float] = None
     tags: List[Tag] = Field(default_factory=list)
     details: Optional[AgentTraceDetails] = None
+    executionMode: Optional[ExecutionMode] = "LLM_REASONING"
+    providerName: Optional[str] = None
+    modelName: Optional[str] = None
 
 class RiskCheckItem(BaseModel):
     passed: bool
@@ -207,6 +212,11 @@ class DecisionPacket(BaseModel):
     riskCompilerResult: RiskCheckResult
     status: DecisionStatus
     mlegOrderPayload: Optional[MlegOrderPayload] = None
+    autonomyLevel: Optional[AutonomyLevel] = "GUARDED_AUTONOMOUS"
+    isDegradedMode: bool = False
+    llmProvider: Optional[str] = None
+    llmModel: Optional[str] = None
+    degradedReason: Optional[str] = None
 
 class OrderResult(BaseModel):
     orderId: str
@@ -323,10 +333,50 @@ class CounterfactualComparison(BaseModel):
 class MandateRequest(BaseModel):
     mandate: str
     underlying: Optional[str] = "SPY"
+    autonomyLevel: Optional[AutonomyLevel] = None
 
 class ApprovalRequest(BaseModel):
     decisionId: str
     notes: Optional[str] = None
+
+class SystemSettings(BaseModel):
+    llmProvider: str
+    llmModel: str
+    isApiKeyConfigured: bool
+    apiKeyMasked: Optional[str] = None
+    autonomyLevel: AutonomyLevel = "GUARDED_AUTONOMOUS"
+    availableProviders: List[str] = Field(default_factory=lambda: [
+        "gemini", "openai", "groq", "anthropic", "deepseek", "ollama", "custom"
+    ])
+    availableModels: Dict[str, List[str]] = Field(default_factory=lambda: {
+        "gemini": ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
+        "openai": ["gpt-4o-mini", "gpt-4o", "o3-mini", "gpt-4-turbo"],
+        "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+        "anthropic": ["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022"],
+        "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+        "ollama": ["llama3.2:3b", "qwen2.5:3b", "mistral:7b"],
+        "custom": ["default"],
+    })
+
+class UpdateSettingsRequest(BaseModel):
+    llmProvider: Optional[str] = None
+    llmModel: Optional[str] = None
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+    autonomyLevel: Optional[AutonomyLevel] = None
+
+class TestConnectionRequest(BaseModel):
+    provider: str
+    model: Optional[str] = None
+    apiKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+
+class TestConnectionResponse(BaseModel):
+    success: bool
+    provider: str
+    model: str
+    message: str
+    latencyMs: Optional[int] = None
 
 # ==========================================
 # Runtime Multi-Agent Communication Contracts

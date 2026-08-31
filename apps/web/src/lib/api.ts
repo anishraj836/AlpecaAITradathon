@@ -32,10 +32,14 @@ export interface ApiClient {
   getActiveOperation(): Promise<ActiveOperationState>;
   getHistoricalDecisions(): Promise<HistoricalDecisionSummary[]>;
   getCounterfactual(params?: Record<string, unknown>): Promise<CounterfactualComparison>;
+  getSettings(): Promise<import('@/types/voltron').SystemSettings>;
+  updateSettings(req: import('@/types/voltron').UpdateSettingsRequest): Promise<import('@/types/voltron').SystemSettings>;
+  testLlmConnection(req: import('@/types/voltron').TestConnectionRequest): Promise<import('@/types/voltron').TestConnectionResponse>;
   dispatchMandate(
     mandate: string,
-    onProgress?: (step: MandatePipelineStep) => void
-  ): Promise<{ operationId: string; decisionId: string }>;
+    onProgress?: (step: MandatePipelineStep) => void,
+    autonomyLevel?: import('@/types/voltron').AutonomyLevel
+  ): Promise<{ operationId: string; decisionId: string; packet: DecisionPacket }>;
 }
 
 /**
@@ -132,10 +136,29 @@ class HttpSseApiAdapter implements ApiClient {
     });
   }
 
+  async getSettings(): Promise<import('@/types/voltron').SystemSettings> {
+    return this.fetchJson<import('@/types/voltron').SystemSettings>('/settings');
+  }
+
+  async updateSettings(req: import('@/types/voltron').UpdateSettingsRequest): Promise<import('@/types/voltron').SystemSettings> {
+    return this.fetchJson<import('@/types/voltron').SystemSettings>('/settings', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async testLlmConnection(req: import('@/types/voltron').TestConnectionRequest): Promise<import('@/types/voltron').TestConnectionResponse> {
+    return this.fetchJson<import('@/types/voltron').TestConnectionResponse>('/settings/test', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
   async dispatchMandate(
     mandate: string,
-    onProgress?: (step: MandatePipelineStep) => void
-  ): Promise<{ operationId: string; decisionId: string }> {
+    onProgress?: (step: MandatePipelineStep) => void,
+    autonomyLevel?: import('@/types/voltron').AutonomyLevel
+  ): Promise<{ operationId: string; decisionId: string; packet: DecisionPacket }> {
     let eventSource: EventSource | null = null;
     
     // Connect to SSE stream if running in browser
@@ -182,18 +205,22 @@ class HttpSseApiAdapter implements ApiClient {
       // Submit mandate to FastAPI /api/scan endpoint
       const packet = await this.fetchJson<DecisionPacket>('/scan', {
         method: 'POST',
-        body: JSON.stringify({ mandate, underlying: targetSymbol }),
+        body: JSON.stringify({
+          mandate,
+          underlying: targetSymbol,
+          autonomyLevel: autonomyLevel,
+        }),
       });
 
       // 2. Notify final progress completion
       if (onProgress) {
         onProgress({
           id: 'step-6',
-          title: 'Execution Complete on Alpaca Paper',
+          title: packet.status === 'APPROVED' ? 'Order Executed on Alpaca Paper' : 'Decision Ready for Approval',
           status: 'COMPLETE',
           outputSummary: [
             `Strategy: ${packet.strategy?.name || 'Selected Structure'}`,
-            `Status: ${packet.status} -> Dispatched to Alpaca`,
+            `Status: ${packet.status} | Mode: ${packet.autonomyLevel || 'GUARDED_AUTONOMOUS'}`,
           ],
         });
       }
@@ -201,6 +228,7 @@ class HttpSseApiAdapter implements ApiClient {
       return {
         operationId: `OP-${packet.id}`,
         decisionId: packet.id,
+        packet: packet,
       };
     } finally {
       if (eventSource) {

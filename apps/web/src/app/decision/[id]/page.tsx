@@ -99,22 +99,52 @@ export default function DecisionRoomPage() {
           </span>
         </div>
 
-        {/* AI Confidence Meter */}
-        <div className="flex items-center gap-3 relative z-10 bg-surface px-4 py-2 ring-1 ring-outline-variant/30 rounded-sm">
-          <span className="font-label-xs text-label-xs text-outline uppercase tracking-widest">
-            AI Consensus Confidence
-          </span>
-          <span className="font-data-lg text-data-lg text-primary font-mono font-bold">
-            {Math.round(decision.aiConfidence * 100)}%
-          </span>
-          <div className="w-16 h-1.5 bg-surface-variant ml-2 overflow-hidden rounded-full">
-            <div
-              className="h-full bg-primary"
-              style={{ width: `${Math.round(decision.aiConfidence * 100)}%` }}
-            />
+        {/* AI Confidence Meter & Autonomy Governance */}
+        <div className="flex items-center gap-3 relative z-10">
+          <div className={`px-3 py-1.5 rounded text-xs font-mono border flex items-center gap-1.5 ${
+            decision.autonomyLevel === 'COPILOT'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+              : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+          }`}>
+            <span className="font-bold">{decision.autonomyLevel || 'GUARDED_AUTONOMOUS'}</span>
+          </div>
+
+          <div className="flex items-center gap-3 bg-surface px-4 py-2 ring-1 ring-outline-variant/30 rounded-sm">
+            <span className="font-label-xs text-label-xs text-outline uppercase tracking-widest">
+              {decision.isDegradedMode ? 'Heuristic Score' : 'AI Confidence'}
+            </span>
+            <span className={`font-data-lg text-data-lg font-mono font-bold ${
+              decision.isDegradedMode ? 'text-amber-400' : 'text-primary'
+            }`}>
+              {Math.round(decision.aiConfidence * 100)}%
+            </span>
+            <div className="w-16 h-1.5 bg-surface-variant ml-2 overflow-hidden rounded-full">
+              <div
+                className={`h-full ${decision.isDegradedMode ? 'bg-amber-400' : 'bg-primary'}`}
+                style={{ width: `${Math.round(decision.aiConfidence * 100)}%` }}
+              />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Degraded Mode Radical Transparency Banner */}
+      {decision.isDegradedMode && (
+        <div className="bg-amber-950/40 border border-amber-500/50 text-amber-300 px-4 py-3 rounded-sm flex items-center justify-between font-mono text-xs shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-[20px] text-amber-400">gavel</span>
+            <div>
+              <span className="font-bold">RADICAL TRANSPARENCY NOTICE: </span>
+              <span>
+                LLM committee was offline. This trade was synthesized via deterministic quantitative rules. Autonomous execution was safely locked.
+              </span>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] border border-amber-500/40 uppercase">
+            Human Approval Mandatory
+          </span>
+        </div>
+      )}
 
       {/* Error Alert Banner */}
       {errorMessage && (

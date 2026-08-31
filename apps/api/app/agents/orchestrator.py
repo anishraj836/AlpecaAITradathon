@@ -90,13 +90,19 @@ class VoltronOrchestrator:
         symbol: str = "SPY",
         target_delta: float = 0.15,
         budget: float = 50000.0,
+        autonomy_level: Optional[str] = None,
     ) -> DecisionPacket:
         symbol = symbol.upper()
         now_dt = datetime.now(timezone.utc)
         decision_id = f"DEC-{symbol}-{now_dt.strftime('%H%M%S')}"
         trace_steps: List[AgentTraceStep] = []
 
-        logger.info(f"[{decision_id}] Starting orchestrator mandate: '{mandate}' on {symbol}")
+        # Resolve active autonomy level
+        active_autonomy = (
+            autonomy_level or getattr(settings, "AUTONOMY_LEVEL", "GUARDED_AUTONOMOUS")
+        ).upper()
+
+        logger.info(f"[{decision_id}] Starting orchestrator mandate: '{mandate}' on {symbol} (Autonomy: {active_autonomy})")
 
         try:
             # Stage 0: Initialization
@@ -306,8 +312,25 @@ class VoltronOrchestrator:
             else:
                 decision_status = "AWAITING_APPROVAL"
 
-            # Stage 11: Assemble Complete DecisionPacket
+            # Stage 11: Radical Transparency Audit (Detect Degraded Mode)
+            is_degraded = any(
+                getattr(t, "executionMode", None) == "HEURISTIC_FALLBACK" for t in trace_steps
+            )
+            degraded_reason = (
+                "AI Committee was unavailable (API quota / network). Heuristic rules were used as backup."
+                if is_degraded else None
+            )
+
+            from app.infrastructure.llm import llm_client
+            active_provider = llm_client.provider_name if not is_degraded else "Deterministic Quant Heuristics"
+            active_model = llm_client.model_name if not is_degraded else "Mathematical Rules"
+
             first_evidence = research_out.relevantEvidence[0] if research_out.relevantEvidence else "Market regime verified"
+            
+            # Confidence penalty if degraded
+            raw_conf = (research_out.confidence + vol_out.confidence + strat_out.confidence + critic_out.confidence) / 4.0
+            ai_conf = round(min(raw_conf, 0.45) if is_degraded else raw_conf, 2)
+
             packet = DecisionPacket(
                 id=decision_id,
                 createdAt=_utc_now_iso(),
@@ -316,7 +339,7 @@ class VoltronOrchestrator:
                 marketRegime=research_out.marketRegimeSummary,
                 iv30=surface.skewSnapshot.atmIV,
                 ivRank=72.1,
-                aiConfidence=round((research_out.confidence + vol_out.confidence + strat_out.confidence + critic_out.confidence) / 4.0, 2),
+                aiConfidence=ai_conf,
                 strategy=selected_strategy,
                 evidence={
                     "description": f"{vol_out.summary} {first_evidence}".strip(),
@@ -330,39 +353,63 @@ class VoltronOrchestrator:
                 },
                 riskCompilerResult=risk_result,
                 status=decision_status,
+                autonomyLevel=active_autonomy,
+                isDegradedMode=is_degraded,
+                llmProvider=active_provider,
+                llmModel=active_model,
+                degradedReason=degraded_reason,
             )
 
             # Stage 12: Database Persistence
             if self.session:
                 await self._persist_decision(packet, trace_steps, candidates, risk_result)
 
-            # Stage 13: Autonomous Execution or Human-In-The-Loop Routing
-            if settings.AUTONOMOUS_EXECUTION and decision_status == "AWAITING_APPROVAL" and self.session:
-                from app.services.execution_service import ExecutionService
-                logger.info(f"[{decision_id}] AUTONOMOUS MODE ACTIVE: Risk gate passed. Routing directly to Alpaca...")
-                exec_service = ExecutionService(self.session, self.broker)
-                order_result = await exec_service.approve_and_execute(decision_id)
-                packet.status = "APPROVED"
+            # Stage 13: Autonomy Spectrum Routing (with Safety Demotion)
+            can_auto_execute = (
+                active_autonomy in ["GUARDED_AUTONOMOUS", "AUTOPILOT"]
+                and decision_status == "AWAITING_APPROVAL"
+                and settings.AUTONOMOUS_EXECUTION
+                and self.session is not None
+            )
 
-                await self._emit_event(
-                    decision_id=decision_id,
-                    event_type="autonomous_order_executed",
-                    stage="EXECUTION",
-                    status="COMPLETE",
-                    message=f"🚀 Autonomous Quant Execution: Order {order_result.orderId} filled at ${order_result.avgPrice:.2f} on {order_result.broker}",
-                    payload=order_result.model_dump(),
-                )
+            if can_auto_execute:
+                if is_degraded:
+                    # 🚨 SAFETY DEMOTION: Never allow un-inspected fallback heuristics to execute autonomously!
+                    logger.warning(f"[{decision_id}] SAFETY DEMOTION ACTIVATED: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
+                    await self._emit_event(
+                        decision_id=decision_id,
+                        event_type="safety_demotion_activated",
+                        stage="EXECUTION",
+                        status="COMPLETE",
+                        message=f"⚠️ Safety Demotion: AI Committee was offline. Autonomous execution locked. Manual human review required.",
+                        payload=packet.model_dump(),
+                    )
+                else:
+                    from app.services.execution_service import ExecutionService
+                    logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed. Routing directly to Alpaca...")
+                    exec_service = ExecutionService(self.session, self.broker)
+                    order_result = await exec_service.approve_and_execute(decision_id)
+                    packet.status = "APPROVED"
+
+                    await self._emit_event(
+                        decision_id=decision_id,
+                        event_type="autonomous_order_executed",
+                        stage="EXECUTION",
+                        status="COMPLETE",
+                        message=f"🚀 Autonomous Quant Execution ({active_autonomy}): Order {order_result.orderId} status '{order_result.status}' on {order_result.broker}",
+                        payload=order_result.model_dump(),
+                    )
             else:
                 await self._emit_event(
                     decision_id=decision_id,
                     event_type="decision_completed",
                     stage="COMPLETE",
                     status="COMPLETE",
-                    message=f"Decision Packet {decision_id} ready for human approval.",
+                    message=f"Decision Packet {decision_id} ready for human approval (Mode: {active_autonomy}).",
                     payload=packet.model_dump(),
                 )
 
-            logger.info(f"[{decision_id}] Orchestrator execution completed successfully with status: {packet.status}")
+            logger.info(f"[{decision_id}] Orchestrator execution completed successfully with status: {packet.status} (Degraded: {is_degraded})")
             return packet
 
         except Exception as err:

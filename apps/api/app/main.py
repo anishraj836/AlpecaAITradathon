@@ -9,6 +9,7 @@ from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.agents.orchestrator import VoltronOrchestrator
 from app.domain.models import MandateRequest, DecisionPacket
 from app.api.routes import health, telemetry, decisions, scan, orders, events, replay, history, portfolio
+from app.api.routes import settings as settings_route
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,6 +55,7 @@ async def run_mandate_scan(
         return await orchestrator.execute_mandate(
             mandate=req.mandate,
             symbol=target_symbol,
+            autonomy_level=req.autonomyLevel,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,6 +70,7 @@ app.include_router(events.router, prefix=settings.API_PREFIX)
 app.include_router(replay.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(portfolio.router, prefix=settings.API_PREFIX)
+app.include_router(settings_route.router)
 
 @app.get("/")
 async def root():

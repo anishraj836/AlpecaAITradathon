@@ -30,6 +30,9 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
         self.label = label
         self.output_cls = output_cls
         self.system_prompt = self._load_prompt(system_prompt_path) if system_prompt_path else ""
+        self.last_execution_mode: str = "LLM_REASONING"
+        self.last_provider_name: Optional[str] = None
+        self.last_model_name: Optional[str] = None
 
     def _load_prompt(self, path: str) -> str:
         try:
@@ -82,6 +85,7 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
                 summary=f"Agent execution encountered an error: {str(e)}",
                 confidenceScore=0.0,
                 tags=[Tag(label="FAILED", variant="error")],
+                executionMode="HEURISTIC_FALLBACK",
             )
             raise e
 
@@ -98,8 +102,13 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
 
         tags = [
             Tag(label=f"T+{elapsed_ms}ms", variant="secondary"),
-            Tag(label=f"{int(confidence_val * 100)}% Conf", variant="tertiary" if confidence_val >= 0.8 else "error"),
+            Tag(label=f"{int(confidence_val * 100)}% Conf", variant="tertiary" if confidence_val >= 0.75 else "warning"),
         ]
+
+        if self.last_execution_mode == "LLM_REASONING" and self.last_provider_name:
+            tags.append(Tag(label=f"LLM: {self.last_provider_name.upper()}", variant="primary"))
+        elif self.last_execution_mode == "HEURISTIC_FALLBACK":
+            tags.append(Tag(label="FALLBACK HEURISTIC", variant="error"))
 
         return AgentTraceStep(
             id=step_id,
@@ -111,4 +120,7 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
             summary=summary_val,
             confidenceScore=confidence_val,
             tags=tags,
+            executionMode=self.last_execution_mode,
+            providerName=self.last_provider_name,
+            modelName=self.last_model_name,
         )
