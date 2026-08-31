@@ -1,4 +1,19 @@
+import sys
+from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+# Ensure packages/options-alpha-mcp is always discoverable on sys.path
+_QUANT_PKG_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "packages" / "options-alpha-mcp"
+if _QUANT_PKG_DIR.exists() and str(_QUANT_PKG_DIR) not in sys.path:
+    sys.path.insert(0, str(_QUANT_PKG_DIR))
+
+try:
+    from surface import build_volatility_surface
+    from strategies import generate_all_candidate_structures
+    from stress import evaluate_strategy_stress
+except ImportError:
+    pass
+
 from app.infrastructure.options.gateway import OptionsIntelligenceGateway
 from app.domain.models import (
     VolatilitySurface,

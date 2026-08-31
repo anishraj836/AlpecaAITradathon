@@ -2,8 +2,10 @@ import sys
 import pytest
 from pathlib import Path
 
-# Add apps/api to PYTHONPATH
+# Add apps/api and packages/options-alpha-mcp to PYTHONPATH
+repo_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(repo_root / "packages" / "options-alpha-mcp"))
 
 from app.config import settings
 from app.infrastructure.database.session import init_db, engine, Base

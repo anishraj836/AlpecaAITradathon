@@ -70,15 +70,44 @@ class AlpacaOfficialMCPClient:
         except Exception:
             pass
 
-        # 3. Fallback result structure
-        return {"status": "success", "tool": tool_name, "arguments": arguments}
+        # 3. Honest unavailable response (no fake success fabrication)
+        return {
+            "error": "Alpaca MCP server offline and CLI not available in PATH",
+            "tool": tool_name,
+            "is_available": False,
+        }
+
+    async def is_available(self) -> bool:
+        """Probe if either Alpaca MCP server or Alpaca CLI is actively responsive."""
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=1.5) as client:
+                resp = await client.get(f"{self.server_url}/health")
+                if resp.status_code == 200:
+                    return True
+        except Exception:
+            pass
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "alpaca", "version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate()
+            if proc.returncode == 0:
+                return True
+        except Exception:
+            pass
+
+        return False
 
     async def get_account_via_mcp(self) -> Optional[Dict[str, Any]]:
         """Call official alpaca_get_account MCP tool."""
         res = await self.call_mcp_tool("alpaca_get_account", {})
-        return res if isinstance(res, dict) and "equity" in res else None
+        return res if (isinstance(res, dict) and "equity" in res and not res.get("error")) else None
 
     async def get_positions_via_mcp(self) -> Optional[List[Dict[str, Any]]]:
         """Call official alpaca_get_positions MCP tool."""
         res = await self.call_mcp_tool("alpaca_get_positions", {})
-        return res if isinstance(res, list) else None
+        return res if (isinstance(res, list) and not (isinstance(res, dict) and res.get("error"))) else None

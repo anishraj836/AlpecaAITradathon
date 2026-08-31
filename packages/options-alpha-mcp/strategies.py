@@ -273,6 +273,29 @@ def _build_option_leg(
         "vega": greeks["vega"],
     }
 
+def _find_chain_contract(
+    chain: Optional[List[Dict[str, Any]]],
+    strike: float,
+    opt_type: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Search real Alpaca option chain for the contract with matching type and closest strike.
+    """
+    if not chain:
+        return None
+    target_type = opt_type.upper()
+    matching = [
+        c for c in chain
+        if str(c.get("type", "")).upper() == target_type
+    ]
+    if not matching:
+        return None
+    # Find contract with strike closest to requested strike (within $10 tolerance)
+    closest = min(matching, key=lambda c: abs(float(c.get("strike", 0.0)) - strike))
+    if abs(float(closest.get("strike", 0.0)) - strike) <= 10.0:
+        return closest
+    return None
+
 def _get_strike_step(spot: float) -> float:
     """Determine standard strike width for underlying price."""
     if spot >= 300.0:
@@ -290,7 +313,7 @@ def generate_iron_condor(
     target_delta: float = 0.15,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Iron Condor candidate structure with real BS pricing."""
+    """Generate dynamic Iron Condor candidate structure with real BS pricing and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
 
@@ -300,17 +323,29 @@ def generate_iron_condor(
     sc = round((spot * (1.0 + target_delta * 0.22)) / step) * step
     lc = sc + width
 
+    # Match real live contracts from chain if provided
+    c_lp = _find_chain_contract(chain, lp, "PUT")
+    c_sp = _find_chain_contract(chain, sp, "PUT")
+    c_sc = _find_chain_contract(chain, sc, "CALL")
+    c_lc = _find_chain_contract(chain, lc, "CALL")
+
+    # If real chain contracts matched, use their exact strikes
+    actual_lp = float(c_lp.get("strike", lp)) if c_lp else lp
+    actual_sp = float(c_sp.get("strike", sp)) if c_sp else sp
+    actual_sc = float(c_sc.get("strike", sc)) if c_sc else sc
+    actual_lc = float(c_lc.get("strike", lc)) if c_lc else lc
+
     # Build legs
-    leg1 = _build_option_leg(symbol, spot, lp, dte, "PUT", "BUY", "leg-1", base_iv=0.26)
-    leg2 = _build_option_leg(symbol, spot, sp, dte, "PUT", "SELL", "leg-2", base_iv=0.25)
-    leg3 = _build_option_leg(symbol, spot, sc, dte, "CALL", "SELL", "leg-3", base_iv=0.22)
-    leg4 = _build_option_leg(symbol, spot, lc, dte, "CALL", "BUY", "leg-4", base_iv=0.23)
+    leg1 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-1", base_iv=0.26, chain_contract=c_lp)
+    leg2 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-2", base_iv=0.25, chain_contract=c_sp)
+    leg3 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-3", base_iv=0.22, chain_contract=c_sc)
+    leg4 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-4", base_iv=0.23, chain_contract=c_lc)
 
     # Net credit = (Sell Put + Sell Call) - (Buy Put + Buy Call)
     net_credit = max(0.20, round((leg2["mid"] + leg3["mid"]) - (leg1["mid"] + leg4["mid"]), 2))
 
-    bounds = calculate_max_profit_loss("Iron Condor", sp, lp, sc, lc, net_credit)
-    bes = calculate_breakevens("Iron Condor", sp, lp, sc, lc, net_credit)
+    bounds = calculate_max_profit_loss("Iron Condor", actual_sp, actual_lp, actual_sc, actual_lc, net_credit)
+    bes = calculate_breakevens("Iron Condor", actual_sp, actual_lp, actual_sc, actual_lc, net_credit)
     pop = estimate_probability_of_profit(spot, bes, 0.22, dte / 365.25)
     liq = 93
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.27)
@@ -330,7 +365,7 @@ def generate_iron_condor(
         "liquidityScore": liq,
         "breakevens": bes,
         "rationale": [
-            f"Expected to remain range-bound between ${sp:.2f} and ${sc:.2f}.",
+            f"Expected to remain range-bound between ${actual_sp:.2f} and ${actual_sc:.2f}.",
             "Captures volatility skew advantage on both put and call wings.",
             f"Strictly defined risk (${bounds['maxLoss']:.2f} max loss) fits portfolio parameters.",
         ],
@@ -345,20 +380,25 @@ def generate_put_credit_spread(
     wing_width: Optional[float] = None,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Put Credit Spread candidate structure with real BS pricing."""
+    """Generate dynamic Put Credit Spread candidate structure with real BS pricing and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
 
     sp = round((spot * 0.982) / step) * step
     lp = sp - width
 
-    leg5 = _build_option_leg(symbol, spot, lp, dte, "PUT", "BUY", "leg-5", base_iv=0.26)
-    leg6 = _build_option_leg(symbol, spot, sp, dte, "PUT", "SELL", "leg-6", base_iv=0.25)
+    c_lp = _find_chain_contract(chain, lp, "PUT")
+    c_sp = _find_chain_contract(chain, sp, "PUT")
+    actual_lp = float(c_lp.get("strike", lp)) if c_lp else lp
+    actual_sp = float(c_sp.get("strike", sp)) if c_sp else sp
+
+    leg5 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-5", base_iv=0.26, chain_contract=c_lp)
+    leg6 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-6", base_iv=0.25, chain_contract=c_sp)
 
     net_credit = max(0.15, round(leg6["mid"] - leg5["mid"], 2))
 
-    bounds = calculate_max_profit_loss("Put Credit Spread", sp, lp, net_credit=net_credit)
-    bes = calculate_breakevens("Put Credit Spread", sp, lp, net_credit=net_credit)
+    bounds = calculate_max_profit_loss("Put Credit Spread", actual_sp, actual_lp, net_credit=net_credit)
+    bes = calculate_breakevens("Put Credit Spread", actual_sp, actual_lp, net_credit=net_credit)
     pop = estimate_probability_of_profit(spot, bes, 0.24, dte / 365.25)
     liq = 95
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.30)
@@ -389,20 +429,25 @@ def generate_call_credit_spread(
     wing_width: Optional[float] = None,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Call Credit Spread candidate structure with real BS pricing."""
+    """Generate dynamic Call Credit Spread candidate structure with real BS pricing and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
 
     sc = round((spot * 1.018) / step) * step
     lc = sc + width
 
-    leg7 = _build_option_leg(symbol, spot, sc, dte, "CALL", "SELL", "leg-7", base_iv=0.22)
-    leg8 = _build_option_leg(symbol, spot, lc, dte, "CALL", "BUY", "leg-8", base_iv=0.23)
+    c_sc = _find_chain_contract(chain, sc, "CALL")
+    c_lc = _find_chain_contract(chain, lc, "CALL")
+    actual_sc = float(c_sc.get("strike", sc)) if c_sc else sc
+    actual_lc = float(c_lc.get("strike", lc)) if c_lc else lc
+
+    leg7 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-7", base_iv=0.22, chain_contract=c_sc)
+    leg8 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-8", base_iv=0.23, chain_contract=c_lc)
 
     net_credit = max(0.15, round(leg7["mid"] - leg8["mid"], 2))
 
-    bounds = calculate_max_profit_loss("Call Credit Spread", sc, lc, net_credit=net_credit)
-    bes = calculate_breakevens("Call Credit Spread", sc, lc, net_credit=net_credit)
+    bounds = calculate_max_profit_loss("Call Credit Spread", actual_sc, actual_lc, net_credit=net_credit)
+    bes = calculate_breakevens("Call Credit Spread", actual_sc, actual_lc, net_credit=net_credit)
     pop = estimate_probability_of_profit(spot, bes, 0.22, dte / 365.25)
     liq = 91
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.15)
