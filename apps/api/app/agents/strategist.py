@@ -13,7 +13,7 @@ from app.domain.models import (
     EvaluatedStructure,
 )
 
-from app.infrastructure.gemini.client import gemini_client
+from app.infrastructure.llm import llm_client
 
 PROMPT_PATH = str(Path(__file__).parent.parent / "prompts" / "strategist.md")
 
@@ -24,7 +24,7 @@ class StrategyAnalystInput(BaseModel):
 
 class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
     """
-    Strategy Analyst Agent selecting the optimal pre-computed candidate structure via Gemini LLM.
+    Strategy Analyst Agent selecting the optimal pre-computed candidate structure via Multi-Provider LLM Gateway.
     Strictly validates candidate IDs against the input set to prevent hallucinated structures.
     """
 
@@ -48,8 +48,8 @@ class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
         if not valid_unrejected:
             raise ValueError("All candidate structures rejected by quantitative filters.")
 
-        # 1. Attempt Live Gemini LLM Reasoning
-        if gemini_client.is_configured:
+        # 1. Attempt Live LLM Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
+        if llm_client.is_configured:
             cand_summary = [
                 f"- ID: {c.id} | Name: {c.name} | POP: {c.pop}% | Score: {c.score} | Net Credit: ${c.netCreditOrDebit} | Max Profit: ${c.maxProfit} | Max Risk: ${c.maxLoss}"
                 for c in valid_unrejected
@@ -60,13 +60,13 @@ class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
                 f"Available Pre-Computed Strategy Candidates:\n" + "\n".join(cand_summary) + "\n\n"
                 f"Select the single best candidate ID and explain the quantitative rationale."
             )
-            gemini_out = await gemini_client.generate_structured(
+            llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,
                 user_prompt=prompt,
                 response_model=StrategySelection,
             )
-            if gemini_out and gemini_out.selectedCandidateId in candidate_map:
-                return gemini_out
+            if llm_out and llm_out.selectedCandidateId in candidate_map:
+                return llm_out
 
         # 2. Deterministic Fallback Engine
         # Sort valid candidates by score descending

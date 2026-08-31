@@ -13,7 +13,7 @@ from app.domain.models import (
     AgentTraceDetails,
 )
 
-from app.infrastructure.gemini.client import gemini_client
+from app.infrastructure.llm import llm_client
 
 PROMPT_PATH = str(Path(__file__).parent.parent / "prompts" / "critic.md")
 
@@ -25,7 +25,7 @@ class CriticInput(BaseModel):
 
 class CriticAgent(BaseAgent[CriticInput, Critique]):
     """
-    Adversarial Critic Agent attempting to invalidate the trade and detect structural vulnerabilities via Gemini LLM.
+    Adversarial Critic Agent attempting to invalidate the trade and detect structural vulnerabilities via Multi-Provider LLM Gateway.
     """
 
     def __init__(self):
@@ -41,8 +41,8 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
         stress = input_data.stressReport
         strat_name = strat.name.lower()
 
-        # 1. Attempt Live Gemini LLM Adversarial Reasoning
-        if gemini_client.is_configured:
+        # 1. Attempt Live LLM Adversarial Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
+        if llm_client.is_configured:
             prompt = (
                 f"Candidate Strategy to Invalidate:\n"
                 f"- Name: {strat.name}\n"
@@ -54,13 +54,13 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
                 f"- Volatility Skew: {input_data.volatility.skewInterpretation}\n\n"
                 f"Stress-test this trade aggressively. Identify primary failure modes, breakout vulnerabilities, and risk recommendations."
             )
-            gemini_out = await gemini_client.generate_structured(
+            llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,
                 user_prompt=prompt,
                 response_model=Critique,
             )
-            if gemini_out:
-                return gemini_out
+            if llm_out:
+                return llm_out
 
         # 2. Deterministic Fallback Engine
 

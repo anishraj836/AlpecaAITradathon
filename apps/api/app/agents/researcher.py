@@ -3,13 +3,13 @@ from typing import Optional
 from app.agents.base import BaseAgent
 from app.domain.models import MarketContext, MarketResearch, AgentTraceStep, Tag, AgentTraceDetails
 
-from app.infrastructure.gemini.client import gemini_client
+from app.infrastructure.llm import llm_client
 
 PROMPT_PATH = str(Path(__file__).parent.parent / "prompts" / "researcher.md")
 
 class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
     """
-    Researcher Agent interpreting live broker market context and regime properties via Gemini LLM.
+    Researcher Agent interpreting live broker market context and regime properties via Multi-Provider LLM Gateway.
     """
 
     def __init__(self):
@@ -21,8 +21,8 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
         )
 
     async def _execute_reasoning(self, input_data: MarketContext) -> MarketResearch:
-        # 1. Attempt Live Gemini LLM Reasoning
-        if gemini_client.is_configured:
+        # 1. Attempt Live LLM Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
+        if llm_client.is_configured:
             prompt = (
                 f"Market Context Input:\n"
                 f"- Symbol: {input_data.symbol}\n"
@@ -33,13 +33,13 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
                 f"- Volume: {input_data.volume:,} shares\n\n"
                 f"Analyze the market regime, recent price velocity, event risk, and relevant evidence."
             )
-            gemini_out = await gemini_client.generate_structured(
+            llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,
                 user_prompt=prompt,
                 response_model=MarketResearch,
             )
-            if gemini_out:
-                return gemini_out
+            if llm_out:
+                return llm_out
 
         # 2. Deterministic Fallback Engine
         price = input_data.price

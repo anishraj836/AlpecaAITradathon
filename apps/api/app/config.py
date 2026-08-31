@@ -28,9 +28,36 @@ class Settings(BaseSettings):
     # Autonomous Quant Mode (Dispatches directly to Alpaca when Risk Compiler passes)
     AUTONOMOUS_EXECUTION: bool = True
 
-    # Google Gemini LLM Multi-Agent Reasoning
+    # Multi-Provider LLM Gateway (Gemini, OpenAI, Groq, Anthropic, DeepSeek, Ollama, Custom)
+    LLM_PROVIDER: str = "gemini"
+    LLM_API_KEY: Optional[str] = None
+    LLM_MODEL: Optional[str] = None
+    LLM_BASE_URL: Optional[str] = None
+
+    # Google Gemini
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_BASE_URL: Optional[str] = None
+
+    # Groq Cloud (Ultra-Fast LPUs)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Anthropic Claude
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+
+    # DeepSeek
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # Local Ollama
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2:3b"
     
     # CORS
     ALLOWED_ORIGINS: list[str] = [

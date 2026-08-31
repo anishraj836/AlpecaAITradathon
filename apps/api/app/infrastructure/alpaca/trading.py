@@ -88,7 +88,18 @@ class AlpacaTradingService:
             )
             if resp.status_code >= 400:
                 logger.error(f"Alpaca Order Error ({resp.status_code}): {resp.text} | Payload: {alpaca_payload}")
-            resp.raise_for_status()
+                # Parse rejection payload gracefully
+                now_dt = _utc_now()
+                return OrderResult(
+                    orderId=f"ALP-REJECTED-{now_dt.strftime('%M%S')}",
+                    decisionId=decision.id,
+                    clientOrderId=f"cl-{decision.id}",
+                    status="rejected",
+                    filledAt=now_dt.isoformat() + "Z",
+                    avgPrice=limit_price,
+                    broker="ALPACA_PAPER",
+                    rawPayload=alpaca_payload,
+                )
             return AlpacaNormalizer.normalize_order_result(resp.json(), decision.id)
 
     async def get_order(self, order_id: str, decision_id: Optional[str] = None) -> OrderResult:
