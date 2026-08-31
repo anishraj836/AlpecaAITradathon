@@ -18,12 +18,17 @@ class OptionsIntelligenceGateway(ABC):
     """
 
     @abstractmethod
-    async def get_surface(self, symbol: str) -> VolatilitySurface:
+    async def get_surface(
+        self,
+        symbol: str,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
+    ) -> VolatilitySurface:
         """Compute the implied volatility surface, term structure, and skew snapshot."""
         pass
 
     @abstractmethod
-    async def detect_anomalies(self, symbol: str) -> List[AnomalyReport]:
+    async def detect_anomalies(self, symbol: str, spot: Optional[float] = None) -> List[AnomalyReport]:
         """Scan volatility surface for statistical anomalies and skew dislocations."""
         pass
 
@@ -33,12 +38,21 @@ class OptionsIntelligenceGateway(ABC):
         symbol: str,
         target_delta: float = 0.15,
         max_budget: float = 50000.0,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
     ) -> List[StrategyCandidate]:
         """Generate multi-leg defined-risk strategy candidates matching the thesis."""
         pass
 
     @abstractmethod
-    async def stress_test(self, strategy_id: str) -> StressReport:
+    async def stress_test(
+        self,
+        strategy_id: str,
+        spot: Optional[float] = None,
+        dte: int = 45,
+        legs: Optional[List[Dict[str, Any]]] = None,
+        net_credit: float = 1.38,
+    ) -> StressReport:
         """Run multi-scenario price vs IV stress test matrix for a candidate strategy."""
         pass
 

@@ -19,6 +19,17 @@ class AlpacaTradingService:
             "APCA-API-SECRET-KEY": settings.ALPACA_SECRET_KEY,
             "Content-Type": "application/json",
         }
+        self._sdk_client = None
+        if settings.ALPACA_API_KEY and "DUMMY" not in settings.ALPACA_API_KEY:
+            try:
+                from alpaca.trading.client import TradingClient
+                self._sdk_client = TradingClient(
+                    api_key=settings.ALPACA_API_KEY,
+                    secret_key=settings.ALPACA_SECRET_KEY,
+                    paper=settings.ALPACA_PAPER,
+                )
+            except Exception as e:
+                logger.debug(f"alpaca-py TradingClient init skipped: {e}")
 
     async def place_multileg_order(
         self,

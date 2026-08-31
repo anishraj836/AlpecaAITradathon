@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Dict, Any
 from app.infrastructure.options.gateway import OptionsIntelligenceGateway
 from app.domain.models import StrategyCandidate
 
@@ -11,5 +11,13 @@ class ScanService:
         symbol: str = "SPY",
         target_delta: float = 0.15,
         budget: float = 50000.0,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
     ) -> List[StrategyCandidate]:
-        return await self.quant_gateway.generate_candidates(symbol, target_delta, budget)
+        return await self.quant_gateway.generate_candidates(
+            symbol=symbol,
+            target_delta=target_delta,
+            max_budget=budget,
+            spot=spot,
+            chain=chain,
+        )

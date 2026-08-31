@@ -126,19 +126,28 @@ class VoltronOrchestrator:
                 payload={"spotPrice": market_context.price, "equity": account.equity},
             )
 
-            # Stage 2: Volatility Surface & Anomaly Scanning (Single Quant MCP Fetch)
-            surface = await self.quant.get_surface(symbol)
-            anomalies = surface.anomalies if surface.anomalies else await self.quant.detect_anomalies(symbol)
+            # Stage 2: Retrieve Live Option Chain & Volatility Surface (Quant MCP)
+            chain_legs = await self.broker.get_option_chain(symbol)
+            chain_dicts = [l.model_dump() for l in chain_legs] if chain_legs else None
+
+            surface = await self.quant.get_surface(symbol, spot=market_context.price, chain=chain_dicts)
+            anomalies = surface.anomalies if surface.anomalies else await self.quant.detect_anomalies(symbol, spot=market_context.price)
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="surface_completed",
                 stage="DATA_FETCH",
                 status="COMPLETE",
-                message=f"Retrieved volatility surface and {len(anomalies)} anomalies",
+                message=f"Retrieved {symbol} live option chain ({len(chain_legs)} contracts) and surface",
             )
 
-            # Stage 3: Candidate Generation (Quant MCP)
-            candidates = await self.quant.generate_candidates(symbol, target_delta, budget)
+            # Stage 3: Candidate Generation (Quant MCP with live spot and chain)
+            candidates = await self.quant.generate_candidates(
+                symbol=symbol,
+                target_delta=target_delta,
+                max_budget=budget,
+                spot=market_context.price,
+                chain=chain_dicts,
+            )
             if not candidates:
                 raise ValueError(f"No candidate options strategies returned by Quant engine for {symbol}.")
             await self._emit_event(
@@ -146,7 +155,7 @@ class VoltronOrchestrator:
                 event_type="candidate_generation_completed",
                 stage="QUANT_GEN",
                 status="COMPLETE",
-                message=f"Generated {len(candidates)} candidate structures",
+                message=f"Generated {len(candidates)} candidate structures dynamically",
             )
 
             # Stage 4: Run Researcher Agent

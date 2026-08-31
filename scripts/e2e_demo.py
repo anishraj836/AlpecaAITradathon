@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "api"))
 
 from app.infrastructure.database.session import init_db, async_session_factory
 from app.infrastructure.alpaca.mcp_client import AlpacaBrokerGateway
-from app.infrastructure.options.mock_gateway import MockOptionsIntelligenceGateway
+from app.infrastructure.options.mcp_client import VoltronOptionsMCPClient
 from app.agents.orchestrator import VoltronOrchestrator
 from app.services.decision_service import DecisionService
 from app.services.execution_service import ExecutionService
@@ -17,7 +17,7 @@ from app.infrastructure.database.repositories.orders import OrderRepository
 
 async def run_e2e_demo():
     print("============================================================")
-    print("VOLTRON FULL END-TO-END WORKFLOW VERIFICATION (MOCK MODE)")
+    print("VOLTRON FULL END-TO-END WORKFLOW VERIFICATION (LIVE PAPER)")
     print("============================================================")
 
     # 1. Initialize DB
@@ -26,17 +26,18 @@ async def run_e2e_demo():
 
     # 2. Gateways
     broker = AlpacaBrokerGateway()
-    quant = MockOptionsIntelligenceGateway()
-    print("[2/8] AlpacaBrokerGateway and MockOptionsIntelligenceGateway initialized.")
+    quant = VoltronOptionsMCPClient()
+    print("[2/8] AlpacaBrokerGateway and VoltronOptionsMCPClient initialized.")
 
-    # 3. Execute Orchestrator Mandate
+    # 3. Execute Orchestrator Mandate with Live Options Chain
     async with async_session_factory() as session:
         orchestrator = VoltronOrchestrator(broker, quant, session)
         mandate = "Harvest elevated 30-day SPY put skew with defined risk"
-        packet = await orchestrator.execute_mandate(mandate=mandate, symbol="SPY")
+        packet = await orchestrator.execute_mandate(mandate=mandate, symbol="SPY", autonomy_level="COPILOT")
         print(f"[3/8] Orchestrator completed mandate. Decision ID: {packet.id}")
         print(f"      Underlying: {packet.underlying} | Spot: ${packet.spotPrice:.2f} | Regime: {packet.marketRegime}")
         print(f"      Selected Strategy: {packet.strategy.name} | POP: {packet.strategy.pop*100:.1f}% | Score: {packet.strategy.score:.1f}")
+        print(f"      Legs Count: {len(packet.strategy.legs)} | Net Credit: ${packet.strategy.netCreditOrDebit:.2f}")
         print(f"      Risk Compiler Gate: Approved={packet.riskCompilerResult.isApproved} | Status: {packet.status}")
 
     # 4. Verify Trace Steps & Audit Trail

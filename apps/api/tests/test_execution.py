@@ -32,7 +32,7 @@ async def test_mleg_compiler_valid_condor():
     assert payload.symbol == "SPY"
     assert payload.orderType == "limit"
     assert payload.timeInForce == "day"
-    assert payload.limitPrice == 1.38
+    assert payload.limitPrice == abs(strategy.netCreditOrDebit)
     assert len(payload.legs) == 4
     assert payload.legs[0].position_intent == "buy_to_open"
     assert payload.legs[1].position_intent == "sell_to_open"

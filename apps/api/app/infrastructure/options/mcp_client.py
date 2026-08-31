@@ -24,14 +24,24 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
         self.mock_fallback = MockOptionsIntelligenceGateway()
         self.base_url = settings.VOLTRON_MCP_URL
 
-    async def get_surface(self, symbol: str) -> VolatilitySurface:
+    async def get_surface(
+        self,
+        symbol: str,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
+    ) -> VolatilitySurface:
         if settings.USE_MOCK_QUANT or not self.base_url:
-            return await self.mock_fallback.get_surface(symbol)
+            return await self.mock_fallback.get_surface(symbol, spot=spot, chain=chain)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{self.base_url}/rpc",
-                    json={"jsonrpc": "2.0", "method": "get_surface", "params": {"symbol": symbol}, "id": 1},
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "get_surface",
+                        "params": {"symbol": symbol, "spot": spot, "chain": chain},
+                        "id": 1,
+                    },
                     timeout=10.0,
                 )
                 if resp.status_code == 200:
@@ -40,16 +50,21 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                         return VolatilitySurface.model_validate(result)
         except Exception:
             pass
-        return await self.mock_fallback.get_surface(symbol)
+        return await self.mock_fallback.get_surface(symbol, spot=spot, chain=chain)
 
-    async def detect_anomalies(self, symbol: str) -> List[AnomalyReport]:
+    async def detect_anomalies(self, symbol: str, spot: Optional[float] = None) -> List[AnomalyReport]:
         if settings.USE_MOCK_QUANT or not self.base_url:
-            return await self.mock_fallback.detect_anomalies(symbol)
+            return await self.mock_fallback.detect_anomalies(symbol, spot=spot)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{self.base_url}/rpc",
-                    json={"jsonrpc": "2.0", "method": "detect_anomalies", "params": {"symbol": symbol}, "id": 2},
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "detect_anomalies",
+                        "params": {"symbol": symbol, "spot": spot},
+                        "id": 2,
+                    },
                     timeout=10.0,
                 )
                 if resp.status_code == 200:
@@ -58,16 +73,20 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                         return [AnomalyReport.model_validate(item) for item in result]
         except Exception:
             pass
-        return await self.mock_fallback.detect_anomalies(symbol)
+        return await self.mock_fallback.detect_anomalies(symbol, spot=spot)
 
     async def generate_candidates(
         self,
         symbol: str,
         target_delta: float = 0.15,
         max_budget: float = 50000.0,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
     ) -> List[StrategyCandidate]:
         if settings.USE_MOCK_QUANT or not self.base_url:
-            return await self.mock_fallback.generate_candidates(symbol, target_delta, max_budget)
+            return await self.mock_fallback.generate_candidates(
+                symbol, target_delta, max_budget, spot=spot, chain=chain
+            )
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
@@ -75,7 +94,13 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                     json={
                         "jsonrpc": "2.0",
                         "method": "generate_candidates",
-                        "params": {"symbol": symbol, "target_delta": target_delta, "max_budget": max_budget},
+                        "params": {
+                            "symbol": symbol,
+                            "target_delta": target_delta,
+                            "max_budget": max_budget,
+                            "spot": spot,
+                            "chain": chain,
+                        },
                         "id": 3,
                     },
                     timeout=15.0,
@@ -86,16 +111,38 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                         return [StrategyCandidate.model_validate(item) for item in result]
         except Exception:
             pass
-        return await self.mock_fallback.generate_candidates(symbol, target_delta, max_budget)
+        return await self.mock_fallback.generate_candidates(
+            symbol, target_delta, max_budget, spot=spot, chain=chain
+        )
 
-    async def stress_test(self, strategy_id: str) -> StressReport:
+    async def stress_test(
+        self,
+        strategy_id: str,
+        spot: Optional[float] = None,
+        dte: int = 45,
+        legs: Optional[List[Dict[str, Any]]] = None,
+        net_credit: float = 1.38,
+    ) -> StressReport:
         if settings.USE_MOCK_QUANT or not self.base_url:
-            return await self.mock_fallback.stress_test(strategy_id)
+            return await self.mock_fallback.stress_test(
+                strategy_id, spot=spot, dte=dte, legs=legs, net_credit=net_credit
+            )
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{self.base_url}/rpc",
-                    json={"jsonrpc": "2.0", "method": "stress_test", "params": {"strategy_id": strategy_id}, "id": 4},
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "stress_test",
+                        "params": {
+                            "strategy_id": strategy_id,
+                            "spot": spot,
+                            "dte": dte,
+                            "legs": legs,
+                            "net_credit": net_credit,
+                        },
+                        "id": 4,
+                    },
                     timeout=10.0,
                 )
                 if resp.status_code == 200:
@@ -104,7 +151,9 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                         return StressReport.model_validate(result)
         except Exception:
             pass
-        return await self.mock_fallback.stress_test(strategy_id)
+        return await self.mock_fallback.stress_test(
+            strategy_id, spot=spot, dte=dte, legs=legs, net_credit=net_credit
+        )
 
     async def compile_risk(
         self,

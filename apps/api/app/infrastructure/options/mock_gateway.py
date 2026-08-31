@@ -132,35 +132,51 @@ class MockOptionsIntelligenceGateway(OptionsIntelligenceGateway):
             ],
         )
 
-    async def get_surface(self, symbol: str = "SPY") -> VolatilitySurface:
-        return VolatilitySurface(
-            underlying=symbol.upper(),
-            spotPrice=645.31,
-            changePct=0.82,
-            timestamp="10:45:12 AM EST",
-            points=[
-                VolatilitySurfacePoint(strike=625.0, dte=14, iv=27.3, delta=-0.15, volume=14200, openInterest=45000),
-                VolatilitySurfacePoint(strike=630.0, dte=14, iv=25.8, delta=-0.22, volume=28400, openInterest=82000),
-                VolatilitySurfacePoint(strike=645.0, dte=14, iv=24.8, delta=0.50, volume=95000, openInterest=180000),
-                VolatilitySurfacePoint(strike=660.0, dte=14, iv=22.4, delta=0.20, volume=34000, openInterest=76000),
-                VolatilitySurfacePoint(strike=665.0, dte=14, iv=21.8, delta=0.12, volume=18500, openInterest=51000),
-            ],
-            termStructure=[
-                TermStructurePoint(dte=7, label="7D", dateLabel="Nov 24", iv=27.3, percentageOfMax=85.0),
-                TermStructurePoint(dte=14, label="14D", dateLabel="Dec 01", iv=24.8, percentageOfMax=75.0),
-                TermStructurePoint(dte=30, label="30D", dateLabel="Dec 17", iv=23.5, percentageOfMax=65.0),
-                TermStructurePoint(dte=45, label="45D", dateLabel="Jan 01", iv=22.7, percentageOfMax=60.0),
-            ],
-            skewSnapshot=SkewSnapshot(
-                put25DeltaIV=27.4,
-                atmIV=23.1,
-                call25DeltaIV=21.8,
-                skewRatio=1.25,
-            ),
-            anomalies=await self.detect_anomalies(symbol),
-        )
+    async def get_surface(
+        self,
+        symbol: str = "SPY",
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
+    ) -> VolatilitySurface:
+        actual_spot = spot if (spot is not None and spot > 0) else (645.31 if symbol.upper() == "SPY" else 230.0)
+        try:
+            from surface import build_volatility_surface
+            raw_surface = build_volatility_surface(
+                underlying=symbol.upper(),
+                spot_price=actual_spot,
+                change_pct=0.82,
+                raw_contracts=chain,
+            )
+            return VolatilitySurface.model_validate(raw_surface)
+        except Exception:
+            return VolatilitySurface(
+                underlying=symbol.upper(),
+                spotPrice=actual_spot,
+                changePct=0.82,
+                timestamp="10:45:12 AM EST",
+                points=[
+                    VolatilitySurfacePoint(strike=round(actual_spot * 0.969, 1), dte=14, iv=27.3, delta=-0.15, volume=14200, openInterest=45000),
+                    VolatilitySurfacePoint(strike=round(actual_spot * 0.976, 1), dte=14, iv=25.8, delta=-0.22, volume=28400, openInterest=82000),
+                    VolatilitySurfacePoint(strike=round(actual_spot * 1.000, 1), dte=14, iv=24.8, delta=0.50, volume=95000, openInterest=180000),
+                    VolatilitySurfacePoint(strike=round(actual_spot * 1.023, 1), dte=14, iv=22.4, delta=0.20, volume=34000, openInterest=76000),
+                    VolatilitySurfacePoint(strike=round(actual_spot * 1.031, 1), dte=14, iv=21.8, delta=0.12, volume=18500, openInterest=51000),
+                ],
+                termStructure=[
+                    TermStructurePoint(dte=7, label="7D", dateLabel="Nov 24", iv=27.3, percentageOfMax=85.0),
+                    TermStructurePoint(dte=14, label="14D", dateLabel="Dec 01", iv=24.8, percentageOfMax=75.0),
+                    TermStructurePoint(dte=30, label="30D", dateLabel="Dec 17", iv=23.5, percentageOfMax=65.0),
+                    TermStructurePoint(dte=45, label="45D", dateLabel="Jan 01", iv=22.7, percentageOfMax=60.0),
+                ],
+                skewSnapshot=SkewSnapshot(
+                    put25DeltaIV=27.4,
+                    atmIV=23.1,
+                    call25DeltaIV=21.8,
+                    skewRatio=1.25,
+                ),
+                anomalies=await self.detect_anomalies(symbol),
+            )
 
-    async def detect_anomalies(self, symbol: str = "SPY") -> List[AnomalyReport]:
+    async def detect_anomalies(self, symbol: str = "SPY", spot: Optional[float] = None) -> List[AnomalyReport]:
         return [
             AnomalyReport(
                 id="anom-1",
@@ -196,117 +212,79 @@ class MockOptionsIntelligenceGateway(OptionsIntelligenceGateway):
         symbol: str = "SPY",
         target_delta: float = 0.15,
         max_budget: float = 50000.0,
+        spot: Optional[float] = None,
+        chain: Optional[List[Dict[str, Any]]] = None,
     ) -> List[StrategyCandidate]:
-        primary = self._get_demo_strategy()
-        candidate2 = StrategyCandidate(
-            id="strat-putspread-02",
-            name="Put Credit Spread",
-            underlying=symbol.upper(),
-            dte=30,
-            rank=2,
-            score=81.7,
-            pop=0.712,
-            maxProfit=216.0,
-            maxLoss=284.0,
-            netCreditOrDebit=2.16,
-            liquidityScore=95,
-            breakevens=[632.84],
-            rationale=["Elevated downside put skew creates asymmetric premium harvesting."],
-            legs=[
-                OptionLeg(
-                    id="leg-5",
-                    symbol="SPY260901P00630000",
-                    underlying=symbol.upper(),
-                    expiration="2026-09-01",
-                    dte=30,
-                    strike=630.0,
-                    type="PUT",
-                    side="BUY",
-                    ratio=1,
-                    bid=1.25,
-                    ask=1.29,
-                    mid=1.27,
-                    iv=0.26,
-                    delta=-0.14,
-                    gamma=0.016,
-                    theta=-0.04,
-                    vega=0.16,
-                ),
-                OptionLeg(
-                    id="leg-6",
-                    symbol="SPY260901P00635000",
-                    underlying=symbol.upper(),
-                    expiration="2026-09-01",
-                    dte=30,
-                    strike=635.0,
-                    type="PUT",
-                    side="SELL",
-                    ratio=1,
-                    bid=3.41,
-                    ask=3.45,
-                    mid=3.43,
-                    iv=0.252,
-                    delta=-0.22,
-                    gamma=0.022,
-                    theta=-0.07,
-                    vega=0.24,
-                ),
-            ],
-        )
-        rejected = StrategyCandidate(
-            id="strat-straddle-rej",
-            name="Short Straddle",
-            underlying=symbol.upper(),
-            dte=45,
-            score=42.1,
-            pop=0.48,
-            maxProfit=850.0,
-            maxLoss=99999.0,
-            netCreditOrDebit=8.50,
-            liquidityScore=98,
-            breakevens=[636.5, 653.5],
-            rationale=[],
-            rejectionReason="REJECTED: Excessive tail exposure (Max risk exceeds $5,000 parameter constraint)",
-            legs=[],
-        )
-        return [primary, candidate2, rejected]
+        actual_spot = spot if (spot is not None and spot > 0) else (645.31 if symbol.upper() == "SPY" else 230.0)
+        try:
+            from strategies import generate_all_candidate_structures
+            raw_candidates = generate_all_candidate_structures(
+                symbol=symbol.upper(),
+                spot=actual_spot,
+                target_delta=target_delta,
+                max_budget=max_budget,
+                chain=chain,
+            )
+            return [StrategyCandidate.model_validate(c) for c in raw_candidates]
+        except Exception:
+            primary = self._get_demo_strategy()
+            return [primary]
 
-    async def stress_test(self, strategy_id: str = "strat-condor-01") -> StressReport:
-        return StressReport(
-            strategyId=strategy_id,
-            modelId="V-CONDOR-09",
-            baselinePnl=6100.0,
-            maxProfitZone=MaxProfitZone(minPrice=620.0, maxPrice=660.0, maxPnl=12450.0),
-            assumptions=ModelAssumptions(
-                riskBudget=50000.0,
-                targetDelta=0.15,
-                evaluationHorizonDays=45,
-                volRegime="ELEVATED",
-            ),
-            matrix=[
-                StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=-20.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=0.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=20.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=-20.0, pnl=-2150.0),
-                StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=0.0, pnl=-2850.0),
-                StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=20.0, pnl=-3450.0),
-                StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=-20.0, pnl=720.0),
-                StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=0.0, pnl=-1450.0),
-                StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=20.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=0.0, ivShiftPct=-20.0, pnl=1380.0),
-                StressMatrixCell(priceShiftPct=0.0, ivShiftPct=0.0, pnl=1380.0),
-                StressMatrixCell(priceShiftPct=0.0, ivShiftPct=20.0, pnl=450.0),
-                StressMatrixCell(priceShiftPct=3.0, ivShiftPct=-20.0, pnl=950.0),
-                StressMatrixCell(priceShiftPct=3.0, ivShiftPct=0.0, pnl=-1200.0),
-                StressMatrixCell(priceShiftPct=3.0, ivShiftPct=20.0, pnl=-3450.0),
-                StressMatrixCell(priceShiftPct=5.0, ivShiftPct=-20.0, pnl=-1850.0),
-                StressMatrixCell(priceShiftPct=5.0, ivShiftPct=0.0, pnl=-2600.0),
-                StressMatrixCell(priceShiftPct=5.0, ivShiftPct=20.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=10.0, ivShiftPct=-20.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=10.0, ivShiftPct=0.0, pnl=-3620.0),
-                StressMatrixCell(priceShiftPct=10.0, ivShiftPct=20.0, pnl=-3620.0),
-            ],
-        )
+    async def stress_test(
+        self,
+        strategy_id: str = "strat-condor-01",
+        spot: Optional[float] = None,
+        dte: int = 45,
+        legs: Optional[List[Dict[str, Any]]] = None,
+        net_credit: float = 1.38,
+    ) -> StressReport:
+        actual_spot = spot if (spot is not None and spot > 0) else 645.31
+        try:
+            from stress import evaluate_strategy_stress
+            raw_stress = evaluate_strategy_stress(
+                strategy_id=strategy_id,
+                spot_price=actual_spot,
+                dte=dte,
+                legs=legs,
+                net_credit=net_credit,
+            )
+            return StressReport.model_validate(raw_stress)
+        except Exception:
+            return StressReport(
+                strategyId=strategy_id,
+                modelId="V-CONDOR-09",
+                baselinePnl=round(net_credit * 100.0, 2),
+                maxProfitZone=MaxProfitZone(minPrice=round(actual_spot * 0.96, 2), maxPrice=round(actual_spot * 1.04, 2), maxPnl=round(net_credit * 100.0, 2)),
+                assumptions=ModelAssumptions(
+                    riskBudget=50000.0,
+                    targetDelta=target_delta if 'target_delta' in locals() else 0.15,
+                    evaluationHorizonDays=dte,
+                    volRegime="ELEVATED",
+                ),
+                matrix=[
+                    StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=-20.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=0.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=-10.0, ivShiftPct=20.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=-20.0, pnl=-2150.0),
+                    StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=0.0, pnl=-2850.0),
+                    StressMatrixCell(priceShiftPct=-5.0, ivShiftPct=20.0, pnl=-3450.0),
+                    StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=-20.0, pnl=720.0),
+                    StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=0.0, pnl=-1450.0),
+                    StressMatrixCell(priceShiftPct=-3.0, ivShiftPct=20.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=0.0, ivShiftPct=-20.0, pnl=1380.0),
+                    StressMatrixCell(priceShiftPct=0.0, ivShiftPct=0.0, pnl=1380.0),
+                    StressMatrixCell(priceShiftPct=0.0, ivShiftPct=20.0, pnl=450.0),
+                    StressMatrixCell(priceShiftPct=3.0, ivShiftPct=-20.0, pnl=950.0),
+                    StressMatrixCell(priceShiftPct=3.0, ivShiftPct=0.0, pnl=-1200.0),
+                    StressMatrixCell(priceShiftPct=3.0, ivShiftPct=20.0, pnl=-3450.0),
+                    StressMatrixCell(priceShiftPct=5.0, ivShiftPct=-20.0, pnl=-1850.0),
+                    StressMatrixCell(priceShiftPct=5.0, ivShiftPct=0.0, pnl=-2600.0),
+                    StressMatrixCell(priceShiftPct=5.0, ivShiftPct=20.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=10.0, ivShiftPct=-20.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=10.0, ivShiftPct=0.0, pnl=-3620.0),
+                    StressMatrixCell(priceShiftPct=10.0, ivShiftPct=20.0, pnl=-3620.0),
+                ],
+            )
 
     async def compile_risk(
         self,

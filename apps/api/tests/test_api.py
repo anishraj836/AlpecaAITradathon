@@ -30,7 +30,7 @@ async def test_scan_mandate_endpoint():
         data = resp.json()
         assert data["id"].startswith("DEC-SPY-")
         assert data["underlying"] == "SPY"
-        assert data["strategy"]["name"] == "Iron Condor"
+        assert data["strategy"]["name"] in ("Iron Condor", "Put Credit Spread")
         assert data["status"] in ("APPROVED", "AWAITING_APPROVAL")
 
 @pytest.mark.asyncio

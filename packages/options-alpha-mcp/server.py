@@ -59,10 +59,19 @@ TICKER_DEFAULT_SPOTS: Dict[str, float] = {
 def get_spot_for_ticker(symbol: str) -> float:
     return TICKER_DEFAULT_SPOTS.get(symbol.upper(), 500.0)
 
-def handle_get_surface(symbol: str) -> Dict[str, Any]:
+def handle_get_surface(
+    symbol: str,
+    spot: Optional[float] = None,
+    chain: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """Compute implied volatility surface, term structure, and skew snapshot."""
-    spot = get_spot_for_ticker(symbol)
-    surface = build_volatility_surface(underlying=symbol, spot_price=spot, change_pct=1.2)
+    actual_spot = spot if (spot is not None and spot > 0) else get_spot_for_ticker(symbol)
+    surface = build_volatility_surface(
+        underlying=symbol,
+        spot_price=actual_spot,
+        change_pct=1.2,
+        raw_contracts=chain,
+    )
     # Detect statistical anomalies on the computed surface
     anomalies = detect_volatility_anomalies(
         underlying=symbol,
@@ -72,24 +81,44 @@ def handle_get_surface(symbol: str) -> Dict[str, Any]:
     surface["anomalies"] = anomalies
     return surface
 
-def handle_detect_anomalies(symbol: str) -> List[Dict[str, Any]]:
+def handle_detect_anomalies(symbol: str, spot: Optional[float] = None) -> List[Dict[str, Any]]:
     """Scan volatility surface for statistical anomalies and skew dislocations."""
-    surface = handle_get_surface(symbol)
+    surface = handle_get_surface(symbol, spot=spot)
     return surface.get("anomalies", [])
 
-def handle_generate_candidates(symbol: str, target_delta: float, max_budget: float) -> List[Dict[str, Any]]:
-    """Generate and score multi-leg defined-risk strategy candidate structures."""
-    spot = get_spot_for_ticker(symbol)
+def handle_generate_candidates(
+    symbol: str,
+    target_delta: float,
+    max_budget: float,
+    spot: Optional[float] = None,
+    chain: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Generate and score multi-leg defined-risk strategy candidate structures dynamically."""
+    actual_spot = spot if (spot is not None and spot > 0) else get_spot_for_ticker(symbol)
     return generate_all_candidate_structures(
         symbol=symbol,
-        spot=spot,
+        spot=actual_spot,
         target_delta=target_delta,
         max_budget=max_budget,
+        chain=chain,
     )
 
-def handle_stress_test(strategy_id: str) -> Dict[str, Any]:
-    """Run multi-scenario price vs IV stress test matrix (21 scenarios)."""
-    return evaluate_strategy_stress(strategy_id=strategy_id, spot_price=645.31, dte=45)
+def handle_stress_test(
+    strategy_id: str,
+    spot: Optional[float] = None,
+    dte: int = 45,
+    legs: Optional[List[Dict[str, Any]]] = None,
+    net_credit: float = 1.38,
+) -> Dict[str, Any]:
+    """Run multi-scenario price vs IV stress test matrix (21 scenarios) for specific spot and legs."""
+    actual_spot = spot if (spot is not None and spot > 0) else 645.31
+    return evaluate_strategy_stress(
+        strategy_id=strategy_id,
+        spot_price=actual_spot,
+        dte=dte,
+        legs=legs,
+        net_credit=net_credit,
+    )
 
 def handle_compile_risk(strategy: Dict[str, Any], portfolio_equity: float) -> Dict[str, Any]:
     """Execute deterministic pure-code risk compiler checks."""
@@ -100,7 +129,9 @@ def handle_get_counterfactual(params: Dict[str, Any]) -> Dict[str, Any]:
     t_delta = float(params.get("targetDelta", 15.0))
     dte = int(params.get("dteDays", 30))
     budget = float(params.get("budget", 2500.0))
-    strat = handle_generate_candidates("SPY", 0.15, 50000.0)[0]
+    symbol = params.get("symbol", "SPY")
+    spot = float(params.get("spotPrice", get_spot_for_ticker(symbol)))
+    strat = handle_generate_candidates(symbol, 0.15, 50000.0, spot=spot)[0]
 
     return {
         "baseline": {
@@ -120,9 +151,9 @@ def handle_get_counterfactual(params: Dict[str, Any]) -> Dict[str, Any]:
                 "dte": dte,
                 "score": 88.7,
                 "pop": 0.76,
-                "maxProfit": 850.0,
-                "maxLoss": 1650.0,
-                "netCreditOrDebit": 8.50,
+                "maxProfit": round(strat["maxProfit"] * 1.5, 2),
+                "maxLoss": round(strat["maxLoss"] * 1.5, 2),
+                "netCreditOrDebit": round(strat["netCreditOrDebit"] * 1.5, 2),
             },
             "reasoning": [
                 "Increased budget allows for multi-leg Iron Condor structures with higher margin requirements.",
@@ -141,21 +172,36 @@ async def jsonrpc_handler(request: JsonRpcRequest):
     try:
         if method == "get_surface":
             symbol = params.get("symbol", "SPY")
-            return JsonRpcResponse(result=handle_get_surface(symbol), id=request.id)
+            spot = params.get("spot")
+            chain = params.get("chain")
+            return JsonRpcResponse(result=handle_get_surface(symbol, spot=spot, chain=chain), id=request.id)
 
         elif method == "detect_anomalies":
             symbol = params.get("symbol", "SPY")
-            return JsonRpcResponse(result=handle_detect_anomalies(symbol), id=request.id)
+            spot = params.get("spot")
+            return JsonRpcResponse(result=handle_detect_anomalies(symbol, spot=spot), id=request.id)
 
         elif method == "generate_candidates":
             symbol = params.get("symbol", "SPY")
             t_delta = float(params.get("target_delta", 0.15))
             budget = float(params.get("max_budget", 50000.0))
-            return JsonRpcResponse(result=handle_generate_candidates(symbol, t_delta, budget), id=request.id)
+            spot = params.get("spot")
+            chain = params.get("chain")
+            return JsonRpcResponse(
+                result=handle_generate_candidates(symbol, t_delta, budget, spot=spot, chain=chain),
+                id=request.id
+            )
 
         elif method == "stress_test":
             strategy_id = params.get("strategy_id", "strat-condor-01")
-            return JsonRpcResponse(result=handle_stress_test(strategy_id), id=request.id)
+            spot = params.get("spot")
+            dte = int(params.get("dte", 45))
+            legs = params.get("legs")
+            net_credit = float(params.get("net_credit", 1.38))
+            return JsonRpcResponse(
+                result=handle_stress_test(strategy_id, spot=spot, dte=dte, legs=legs, net_credit=net_credit),
+                id=request.id
+            )
 
         elif method == "compile_risk":
             strategy = params.get("strategy", {})
