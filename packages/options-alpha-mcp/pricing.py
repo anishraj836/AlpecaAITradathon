@@ -18,6 +18,83 @@ def _norm_cdf(x: float) -> float:
     """Standard normal cumulative distribution function Phi(x)."""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
+def _norm_inv_cdf(p: float) -> float:
+    """
+    Inverse Standard Normal Cumulative Distribution Function (Phi^-1(p)).
+    Acklam's rational approximation algorithm with machine-precision relative error < 1.15e-9.
+    """
+    if p <= 0.0:
+        return -8.0
+    if p >= 1.0:
+        return 8.0
+
+    a = [-3.969683028665376e+01,  2.209460984245205e+02,
+         -2.759285104469687e+02,  1.383577518672690e+02,
+         -3.066479806614716e+01,  2.506628277459239e+00]
+
+    b = [-5.447609879822406e+01,  1.615858368580409e+02,
+         -1.556989798598866e+02,  6.680131188771972e+01,
+         -1.328068155288572e+01]
+
+    c = [-7.784894002430293e-03, -3.223964580411365e-01,
+         -2.400758277161838e+00, -2.549732539343734e+00,
+          4.374664141464968e+00,  2.938163982698783e+00]
+
+    d = [ 7.784695709041462e-03,  3.224671290700398e-01,
+          2.445134137142996e+00,  3.754408661907416e+00]
+
+    p_low = 0.02425
+    p_high = 1.0 - p_low
+
+    if p < p_low:
+        q = math.sqrt(-2.0 * math.log(p))
+        return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
+               ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0)
+    elif p <= p_high:
+        q = p - 0.5
+        r = q * q
+        return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q / \
+               (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1.0)
+    else:
+        q = math.sqrt(-2.0 * math.log(1.0 - p))
+        return -(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
+                ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0)
+
+def strike_from_delta(
+    spot: float,
+    target_delta: float,
+    time_to_exp: float,
+    vol: float,
+    rate: float = 0.045,
+    is_call: bool = True,
+) -> float:
+    """
+    Exact analytical closed-form strike inversion for a target option delta under Black-Scholes.
+    - For Call: Delta = N(d1) -> d1 = Phi^-1(target_delta)
+    - For Put: Delta = N(d1) - 1 -> d1 = Phi^-1(1 - |target_delta|)
+    """
+    if spot <= 0 or time_to_exp <= 0 or vol <= 0:
+        return spot
+    
+    t_safe = max(0.001, time_to_exp)
+    vol_safe = max(0.01, vol)
+    vol_sqrt_t = vol_safe * math.sqrt(t_safe)
+    drift = (rate + 0.5 * vol_safe * vol_safe) * t_safe
+
+    abs_delta = min(0.49, max(0.01, abs(target_delta)))
+
+    if is_call:
+        d1 = _norm_inv_cdf(abs_delta)
+    else:
+        d1 = _norm_inv_cdf(1.0 - abs_delta)
+
+    # d1 = (ln(S/K) + drift) / (vol*sqrt(t))
+    # ln(S/K) = d1 * vol*sqrt(t) - drift
+    # ln(K/S) = drift - d1 * vol*sqrt(t)
+    # K = S * exp(drift - d1 * vol*sqrt(t))
+    k = spot * math.exp(drift - d1 * vol_sqrt_t)
+    return max(0.50, k)
+
 def _norm_pdf(x: float) -> float:
     """Standard normal probability density function phi(x)."""
     return (1.0 / math.sqrt(2.0 * math.pi)) * math.exp(-0.5 * x * x)

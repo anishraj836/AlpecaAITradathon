@@ -66,6 +66,15 @@ class AlpacaBrokerGateway(BrokerGateway):
         expiration_gte: Optional[str] = None,
         expiration_lte: Optional[str] = None,
     ) -> List[OptionLeg]:
+        # 1. Try official MCP protocol if active
+        try:
+            mcp_chain = await self.mcp_client.get_options_chain_via_mcp(symbol, expiration_gte, expiration_lte)
+            if mcp_chain and isinstance(mcp_chain, list):
+                return [AlpacaNormalizer.normalize_option_contract(c) for c in mcp_chain]
+        except Exception:
+            pass
+
+        # 2. Fall back to official alpaca-py SDK & REST
         return await self.options_service.get_option_chain(symbol, expiration_gte, expiration_lte)
 
     async def place_multileg_order(
@@ -73,7 +82,28 @@ class AlpacaBrokerGateway(BrokerGateway):
         decision: DecisionPacket,
         order_payload: Optional[MlegOrderPayload] = None,
     ) -> OrderResult:
+        # 1. Try official MCP protocol if active
+        try:
+            from app.infrastructure.alpaca.mleg_compiler import MlegOrderCompiler
+            payload = order_payload or MlegOrderCompiler.compile_order_payload(decision)
+            alpaca_mleg = MlegOrderCompiler.to_alpaca_multileg_dict(payload)
+            mcp_order = await self.mcp_client.place_multileg_order_via_mcp(alpaca_mleg)
+            if mcp_order and isinstance(mcp_order, dict) and ("id" in mcp_order or "client_order_id" in mcp_order):
+                return AlpacaNormalizer.normalize_order_result(mcp_order, decision.id)
+        except Exception:
+            pass
+
+        # 2. Fall back to official alpaca-py SDK & REST
         return await self.trading_service.place_multileg_order(decision, order_payload)
 
     async def get_order(self, order_id: str) -> OrderResult:
+        # 1. Try official MCP protocol if active
+        try:
+            mcp_order = await self.mcp_client.get_order_via_mcp(order_id)
+            if mcp_order and isinstance(mcp_order, dict) and ("id" in mcp_order or "status" in mcp_order):
+                return AlpacaNormalizer.normalize_order_result(mcp_order, order_id)
+        except Exception:
+            pass
+
+        # 2. Fall back to official alpaca-py SDK & REST
         return await self.trading_service.get_order(order_id)

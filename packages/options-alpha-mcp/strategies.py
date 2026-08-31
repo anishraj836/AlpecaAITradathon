@@ -13,7 +13,7 @@ All legs are dynamically priced using analytical Black-Scholes with real Greeks.
 import math
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
-from pricing import _norm_cdf, black_scholes_price, black_scholes_greeks, OptionType
+from pricing import _norm_cdf, black_scholes_price, black_scholes_greeks, strike_from_delta, OptionType
 
 def calculate_max_profit_loss(
     strategy_name: str,
@@ -314,15 +314,24 @@ def generate_iron_condor(
     target_delta: float = 0.15,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Iron Condor candidate structure with real BS pricing and live chain matching."""
+    """Generate dynamic Iron Condor candidate structure with exact analytical BS delta inversion and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
+    t_exp = max(0.001, dte / 365.25)
 
-    # Calculate optimal strikes relative to spot
-    sp = round((spot * (1.0 - target_delta * 0.22)) / step) * step
+    # Exact analytical Black-Scholes strike inversion for target delta
+    raw_sp = strike_from_delta(spot, target_delta, t_exp, vol=0.24, rate=0.045, is_call=False)
+    raw_sc = strike_from_delta(spot, target_delta, t_exp, vol=0.22, rate=0.045, is_call=True)
+
+    sp = round(raw_sp / step) * step
     lp = sp - width
-    sc = round((spot * (1.0 + target_delta * 0.22)) / step) * step
+    sc = round(raw_sc / step) * step
     lc = sc + width
+
+    # Enforce strict monotonic wing ordering: lp < sp < sc < lc
+    if sc <= sp:
+        sc = sp + step
+        lc = sc + width
 
     # Match real live contracts from chain if provided
     c_lp = _find_chain_contract(chain, lp, "PUT")
@@ -366,7 +375,7 @@ def generate_iron_condor(
         "liquidityScore": liq,
         "breakevens": bes,
         "rationale": [
-            f"Expected to remain range-bound between ${actual_sp:.2f} and ${actual_sc:.2f}.",
+            f"Target ~{int(target_delta*100)}Δ wings: Expected to remain range-bound between ${actual_sp:.2f} and ${actual_sc:.2f}.",
             "Captures volatility skew advantage on both put and call wings.",
             f"Strictly defined risk (${bounds['maxLoss']:.2f} max loss) fits portfolio parameters.",
         ],
@@ -381,11 +390,14 @@ def generate_put_credit_spread(
     wing_width: Optional[float] = None,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Put Credit Spread candidate structure with real BS pricing and live chain matching."""
+    """Generate dynamic Put Credit Spread candidate structure with exact analytical BS delta inversion and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
+    t_exp = max(0.001, dte / 365.25)
 
-    sp = round((spot * 0.982) / step) * step
+    # 25-delta short put strike via exact analytical inversion
+    raw_sp = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=0.25, rate=0.045, is_call=False)
+    sp = round(raw_sp / step) * step
     lp = sp - width
 
     c_lp = _find_chain_contract(chain, lp, "PUT")
@@ -418,7 +430,7 @@ def generate_put_credit_spread(
         "netCreditOrDebit": bounds["netCredit"],
         "liquidityScore": liq,
         "breakevens": bes,
-        "rationale": [f"Elevated downside put skew on {symbol} creates asymmetric premium harvesting."],
+        "rationale": [f"Elevated downside put skew on {symbol} (~25Δ short strike ${actual_sp:.2f}) creates asymmetric premium harvesting."],
         "legs": [leg5, leg6],
         "rejectionReason": None,
     }
@@ -430,11 +442,14 @@ def generate_call_credit_spread(
     wing_width: Optional[float] = None,
     chain: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Generate dynamic Call Credit Spread candidate structure with real BS pricing and live chain matching."""
+    """Generate dynamic Call Credit Spread candidate structure with exact analytical BS delta inversion and live chain matching."""
     step = _get_strike_step(spot)
     width = wing_width if wing_width is not None else step
+    t_exp = max(0.001, dte / 365.25)
 
-    sc = round((spot * 1.018) / step) * step
+    # 25-delta short call strike via exact analytical inversion
+    raw_sc = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=0.22, rate=0.045, is_call=True)
+    sc = round(raw_sc / step) * step
     lc = sc + width
 
     c_sc = _find_chain_contract(chain, sc, "CALL")
@@ -467,7 +482,7 @@ def generate_call_credit_spread(
         "netCreditOrDebit": bounds["netCredit"],
         "liquidityScore": liq,
         "breakevens": bes,
-        "rationale": [f"Captures elevated call skew on {symbol} while capping max upside risk."],
+        "rationale": [f"Captures elevated call skew on {symbol} (~25Δ short strike ${actual_sc:.2f}) while capping max upside risk."],
         "legs": [leg7, leg8],
         "rejectionReason": None,
     }

@@ -120,6 +120,28 @@ class TestBlackScholesAndGreeks:
         recovered_put_iv = implied_volatility(put_mkt, S, K, T, r, OptionType.PUT)
         assert math.isclose(recovered_put_iv, true_iv, rel_tol=1e-3)
 
+    def test_strike_from_delta_accuracy(self):
+        """Verify analytical strike inversion from target delta matches Black-Scholes Greeks."""
+        from pricing import strike_from_delta
+        S = 645.31
+        T = 45.0 / 365.25
+        r = 0.045
+        vol = 0.22
+        target_delta = 0.15
+
+        # 15-delta Call
+        k_call = strike_from_delta(S, target_delta, T, vol, r, is_call=True)
+        g_call = black_scholes_greeks(S, k_call, T, r, vol, OptionType.CALL)
+        assert math.isclose(g_call["delta"], target_delta, abs_tol=0.005)
+
+        # 15-delta Put (delta is -0.15)
+        k_put = strike_from_delta(S, target_delta, T, vol, r, is_call=False)
+        g_put = black_scholes_greeks(S, k_put, T, r, vol, OptionType.PUT)
+        assert math.isclose(abs(g_put["delta"]), target_delta, abs_tol=0.005)
+
+        # Wing monotonicity
+        assert k_put < S < k_call
+
     def test_liquidity_scoring_composite(self):
         """Verify liquidity score composite weighting and edge cases."""
         # Perfect liquidity (tight spread, high OI, high volume)

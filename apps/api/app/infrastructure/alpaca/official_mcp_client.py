@@ -111,3 +111,49 @@ class AlpacaOfficialMCPClient:
         """Call official alpaca_get_positions MCP tool."""
         res = await self.call_mcp_tool("alpaca_get_positions", {})
         return res if (isinstance(res, list) and not (isinstance(res, dict) and res.get("error"))) else None
+
+    async def get_options_chain_via_mcp(
+        self,
+        symbol: str,
+        expiration_gte: Optional[str] = None,
+        expiration_lte: Optional[str] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Call official alpaca_get_options_chain MCP tool."""
+        args: Dict[str, Any] = {"underlying_symbol": symbol}
+        if expiration_gte:
+            args["expiration_date_gte"] = expiration_gte
+        if expiration_lte:
+            args["expiration_date_lte"] = expiration_lte
+        res = await self.call_mcp_tool("alpaca_get_options_chain", args)
+        if isinstance(res, list) and not (isinstance(res, dict) and res.get("error")):
+            return res
+        if isinstance(res, dict) and "option_contracts" in res:
+            return res["option_contracts"]
+        return None
+
+    async def place_multileg_order_via_mcp(
+        self,
+        order_payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Execute multi-leg options trade via official alpaca_place_order / alpaca_place_multileg_order MCP tool.
+        """
+        # Hard fail-closed paper trading check
+        if not settings.ALPACA_PAPER:
+            raise ValueError("Safety Circuit Breaker: VOLTRON execution is strictly locked to Paper Trading.")
+
+        res = await self.call_mcp_tool("alpaca_place_multileg_order", order_payload)
+        if isinstance(res, dict) and ("id" in res or "client_order_id" in res) and not res.get("error"):
+            return res
+
+        # Try standard alpaca_place_order MCP tool
+        res = await self.call_mcp_tool("alpaca_place_order", order_payload)
+        if isinstance(res, dict) and ("id" in res or "client_order_id" in res) and not res.get("error"):
+            return res
+
+        return None
+
+    async def get_order_via_mcp(self, order_id: str) -> Optional[Dict[str, Any]]:
+        """Call official alpaca_get_order MCP tool."""
+        res = await self.call_mcp_tool("alpaca_get_order", {"order_id": order_id})
+        return res if (isinstance(res, dict) and ("id" in res or "status" in res) and not res.get("error")) else None
