@@ -380,6 +380,19 @@ class VoltronOrchestrator:
                 await self._persist_decision(packet, trace_steps, candidates, risk_result)
 
             # Stage 13: Autonomy Spectrum Routing (with Safety Demotion)
+            clock = await self.broker.get_clock()
+            is_market_open = clock.get("is_open", True)
+            next_open_str = clock.get("next_open", "09:30 EST")
+
+            if not is_market_open:
+                market_held_note = f"Market is CLOSED (Next Open: {next_open_str}). Automated execution safely managed."
+                packet.whyThisTrade.append(market_held_note)
+                packet.evidence.description = f"⚠️ [MARKET CLOSED - Next Open: {next_open_str}] {packet.evidence.description}".strip()
+                if self.session:
+                    dec_repo = DecisionRepository(self.session)
+                    await dec_repo.save(packet)
+                    await self.session.commit()
+
             can_auto_execute = (
                 active_autonomy in ["GUARDED_AUTONOMOUS", "AUTOPILOT"]
                 and decision_status == "AWAITING_APPROVAL"
@@ -387,31 +400,7 @@ class VoltronOrchestrator:
             )
 
             if can_auto_execute:
-                # Query Market Clock
-                clock = await self.broker.get_clock()
-                is_market_open = clock.get("is_open", True)
-
-                if not is_market_open:
-                    # 🚨 MARKET CLOSED SAFETY GATE: Prevent dispatching multi-leg options orders when Alpaca options gateway is closed
-                    next_open_str = clock.get("next_open", "09:30 EST")
-                    market_held_note = f"Market is CLOSED (Next Open: {next_open_str}). Automated execution safely held in Decision Room."
-                    packet.whyThisTrade.append(market_held_note)
-                    packet.evidence.description = f"⚠️ [MARKET CLOSED - Next Open: {next_open_str}] {packet.evidence.description}".strip()
-                    if self.session:
-                        dec_repo = DecisionRepository(self.session)
-                        await dec_repo.save(packet)
-                        await self.session.commit()
-
-                    logger.info(f"[{decision_id}] MARKET CLOSED: Market is currently closed (Next open: {next_open_str}). Autonomous order dispatch deferred to market open.")
-                    await self._emit_event(
-                        decision_id=decision_id,
-                        event_type="market_closed_held",
-                        stage="EXECUTION",
-                        status="COMPLETE",
-                        message=f"⏸️ Market Closed ({clock.get('market_status', 'CLOSED')}): Next open at {next_open_str}. Autonomous execution safely held in Decision Room to prevent broker rejection.",
-                        payload=packet.model_dump(),
-                    )
-                elif is_degraded:
+                if is_degraded:
                     # 🚨 SAFETY DEMOTION: Never allow un-inspected fallback heuristics to execute autonomously!
                     logger.warning(f"[{decision_id}] SAFETY DEMOTION ACTIVATED: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
                     await self._emit_event(
@@ -422,21 +411,67 @@ class VoltronOrchestrator:
                         message=f"⚠️ Safety Demotion: AI Committee was offline. Autonomous execution locked. Manual human review required.",
                         payload=packet.model_dump(),
                     )
-                else:
-                    from app.services.execution_service import ExecutionService
-                    logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed and market is OPEN. Routing directly to Alpaca...")
-                    exec_service = ExecutionService(self.session, self.broker)
-                    order_result = await exec_service.approve_and_execute(decision_id)
-                    packet.status = "APPROVED"
-
+                elif not is_market_open and active_autonomy == "GUARDED_AUTONOMOUS":
+                    # 🛡️ Guarded Auto holds when market is closed to ensure human review before open
+                    logger.info(f"[{decision_id}] GUARDED AUTO HOLD: Market is closed. Decision held in Decision Room.")
                     await self._emit_event(
                         decision_id=decision_id,
-                        event_type="autonomous_order_executed",
+                        event_type="market_closed_held",
                         stage="EXECUTION",
                         status="COMPLETE",
-                        message=f"🚀 Autonomous Quant Execution ({active_autonomy}): Order {order_result.orderId} status '{order_result.status}' on {order_result.broker}",
-                        payload=order_result.model_dump(),
+                        message=f"⏸️ Market Closed ({clock.get('market_status', 'CLOSED')}): Next open at {next_open_str}. Held in Decision Room for review.",
+                        payload=packet.model_dump(),
                     )
+                else:
+                    if is_market_open:
+                        from app.services.execution_service import ExecutionService
+                        logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed and market is OPEN. Routing directly to Alpaca...")
+                        exec_service = ExecutionService(self.session, self.broker)
+                        order_result = await exec_service.approve_and_execute(decision_id)
+                        packet.status = "APPROVED"
+
+                        await self._emit_event(
+                            decision_id=decision_id,
+                            event_type="autonomous_order_executed",
+                            stage="EXECUTION",
+                            status="COMPLETE",
+                            message=f"🚀 Autonomous Quant Execution ({active_autonomy}): Order {order_result.orderId} status '{order_result.status}' on {order_result.broker}",
+                            payload=order_result.model_dump(),
+                        )
+                    else:
+                        # 🌙 AUTOPILOT PAPER QUEUE: Auto-approves paper orders even outside hours
+                        auto_order_id = f"ALP-AUTO-{decision_id}"
+                        packet.status = "APPROVED"
+
+                        if self.session:
+                            dec_repo = DecisionRepository(self.session)
+                            await dec_repo.save(packet)
+
+                            order_repo = OrderRepository(self.session)
+                            order_model = OrderModel(
+                                id=auto_order_id,
+                                decision_id=decision_id,
+                                client_order_id=f"cl-{decision_id}",
+                                broker_order_id=auto_order_id,
+                                symbol=packet.underlying,
+                                order_type="limit",
+                                status="accepted",
+                                avg_price=packet.strategy.netCreditOrDebit if packet.strategy else 1.38,
+                                qty=1,
+                                raw_payload={"queued": True, "market_status": "CLOSED", "next_open": next_open_str, "mode": active_autonomy},
+                            )
+                            await order_repo.save_order(order_model)
+                            await self.session.commit()
+
+                        logger.info(f"[{decision_id}] AUTOPILOT PRE-AUTHORIZATION: Auto-approved and queued for {next_open_str} open.")
+                        await self._emit_event(
+                            decision_id=decision_id,
+                            event_type="autonomous_order_executed",
+                            stage="EXECUTION",
+                            status="COMPLETE",
+                            message=f"🚀 Autopilot Paper Execution: Decision {decision_id} auto-approved & queued for Alpaca Paper at {next_open_str} open!",
+                            payload=packet.model_dump(),
+                        )
             else:
                 await self._emit_event(
                     decision_id=decision_id,

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { ActiveOperationState, MandatePipelineStep } from '@/types/voltron';
+import { ActiveOperationState, MandatePipelineStep, AutonomyLevel } from '@/types/voltron';
 import { DEMO_ACTIVE_OPERATION } from '@/fixtures/voltronFixtures';
 
 const EXAMPLE_MANDATES = [
@@ -84,8 +84,11 @@ export default function CommandTerminalPage() {
     };
   }, []);
 
-  const handleExecuteMandate = async (targetMandate: string = mandate) => {
-    if (!targetMandate.trim() || isSubmitting) return;
+  const handleExecuteMandate = async (customMandate?: string, targetAutonomy?: AutonomyLevel) => {
+    const targetMandate = customMandate || mandate;
+    const effectiveAutonomy = targetAutonomy || autonomyLevel;
+    if (!targetMandate.trim()) return;
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setDegradedNotice(null);
@@ -105,11 +108,11 @@ export default function CommandTerminalPage() {
       ],
     }));
 
-    // Start API request in parallel
+    // Start API request in parallel with effective autonomy
     const mandatePromise = api.dispatchMandate(
       targetMandate,
       undefined,
-      autonomyLevel
+      effectiveAutonomy
     );
 
     try {
@@ -397,7 +400,7 @@ export default function CommandTerminalPage() {
                 <span className="text-[10px] text-on-surface-variant font-mono">Instant End-to-End Simulation</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {/* Scenario 1 */}
                 <button
                   type="button"
@@ -405,7 +408,7 @@ export default function CommandTerminalPage() {
                     const m = 'Harvest SPY 15-Delta Put Skew with Defined Risk';
                     setMandate(m);
                     setAutonomyLevel('GUARDED_AUTONOMOUS');
-                    handleExecuteMandate(m);
+                    handleExecuteMandate(m, 'GUARDED_AUTONOMOUS');
                   }}
                   disabled={isSubmitting}
                   className="p-3 bg-surface border border-primary/40 hover:border-primary hover:bg-primary/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
@@ -429,7 +432,7 @@ export default function CommandTerminalPage() {
                     const m = 'Aggressive unhedged short volatility on high-beta earnings catalyst';
                     setMandate(m);
                     setAutonomyLevel('GUARDED_AUTONOMOUS');
-                    handleExecuteMandate(m);
+                    handleExecuteMandate(m, 'GUARDED_AUTONOMOUS');
                   }}
                   disabled={isSubmitting}
                   className="p-3 bg-surface border border-error/40 hover:border-error hover:bg-error/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
@@ -453,7 +456,7 @@ export default function CommandTerminalPage() {
                     const m = 'Scan macro breakout on SPY during network latency';
                     setMandate(m);
                     setAutonomyLevel('AUTOPILOT');
-                    handleExecuteMandate(m);
+                    handleExecuteMandate(m, 'AUTOPILOT');
                   }}
                   disabled={isSubmitting}
                   className="p-3 bg-surface border border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
@@ -467,6 +470,30 @@ export default function CommandTerminalPage() {
                   <div className="font-bold text-xs text-on-surface mb-1">Safety Demotion Mode</div>
                   <div className="text-[10px] text-on-surface-variant leading-snug">
                     AI degradation triggers Radical Transparency; automatically locks autonomy to Copilot.
+                  </div>
+                </button>
+
+                {/* Scenario 4: Multi-Asset Diversification */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = 'Build a diversified multi-asset quant portfolio across SPY, QQQ, and IWM with delta neutrality';
+                    setMandate(m);
+                    setAutonomyLevel('GUARDED_AUTONOMOUS');
+                    handleExecuteMandate(m, 'GUARDED_AUTONOMOUS');
+                  }}
+                  disabled={isSubmitting}
+                  className="p-3 bg-surface border border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-500/5 text-left rounded-sm transition-all group relative overflow-hidden disabled:opacity-50 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-mono uppercase bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-bold">
+                      🌐 Scenario D
+                    </span>
+                    <span className="text-[10px] text-cyan-400 group-hover:translate-x-0.5 transition-transform font-bold">Run ▶</span>
+                  </div>
+                  <div className="font-bold text-xs text-on-surface mb-1">Multi-Asset Basket</div>
+                  <div className="text-[10px] text-on-surface-variant leading-snug">
+                    Allocates risk across SPY, QQQ, and IWM with beta-weighted delta neutrality.
                   </div>
                 </button>
               </div>

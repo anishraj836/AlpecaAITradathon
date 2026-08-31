@@ -287,6 +287,28 @@ export interface PositionInfo {
   currentPrice: number;
 }
 
+export interface AssetAllocation {
+  symbol: string;
+  assetClass: string;
+  weightPct: number;
+  allocatedAmount: number;
+  currentPnl: number;
+  beta: number;
+  ivRank: number;
+  strategyType: string;
+}
+
+export interface DiversificationAnalysis {
+  diversificationScore: number;
+  rating: string;
+  betaWeightedDelta: number;
+  hhiConcentration: number;
+  maxSingleAssetPct: number;
+  correlationMatrix: Record<string, Record<string, number>>;
+  allocations: AssetAllocation[];
+  rebalanceRecommendation?: string;
+}
+
 export interface PortfolioSummary {
   account: {
     accountId: string;
@@ -306,6 +328,7 @@ export interface PortfolioSummary {
   realizedTodayPnl: number;
   profitTargetPct: number;
   stopLossMultiplier: number;
+  diversification?: DiversificationAnalysis;
 }
 
 export interface MandatePipelineStep {

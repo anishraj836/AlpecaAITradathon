@@ -261,6 +261,26 @@ class PositionInfo(BaseModel):
     unrealizedPl: float
     currentPrice: float
 
+class AssetAllocation(BaseModel):
+    symbol: str
+    assetClass: str
+    weightPct: float
+    allocatedAmount: float
+    currentPnl: float
+    beta: float
+    ivRank: float
+    strategyType: str
+
+class DiversificationAnalysis(BaseModel):
+    diversificationScore: int = 88
+    rating: str = "OPTIMALLY BALANCED"
+    betaWeightedDelta: float = 0.04
+    hhiConcentration: float = 0.28
+    maxSingleAssetPct: float = 35.0
+    correlationMatrix: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    allocations: List[AssetAllocation] = Field(default_factory=list)
+    rebalanceRecommendation: Optional[str] = None
+
 class PortfolioSummary(BaseModel):
     account: AccountInfo
     positions: List[PositionInfo] = Field(default_factory=list)
@@ -272,6 +292,7 @@ class PortfolioSummary(BaseModel):
     realizedTodayPnl: float = 138.00
     profitTargetPct: float = 50.0
     stopLossMultiplier: float = 2.0
+    diversification: Optional[DiversificationAnalysis] = None
 
 class MarketContext(BaseModel):
     symbol: str

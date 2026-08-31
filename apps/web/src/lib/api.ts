@@ -21,6 +21,7 @@ import {
 export interface ApiClient {
   getTelemetry(): Promise<TelemetryStatus>;
   getPortfolio(): Promise<PortfolioSummary>;
+  rebalancePortfolio(): Promise<PortfolioSummary>;
   getDecision(id: string): Promise<DecisionPacket>;
   getOrder(id: string): Promise<OrderResult>;
   approveDecision(id: string): Promise<OrderResult>;
@@ -73,6 +74,10 @@ class HttpSseApiAdapter implements ApiClient {
 
   async getPortfolio(): Promise<PortfolioSummary> {
     return this.fetchJson<PortfolioSummary>('/portfolio');
+  }
+
+  async rebalancePortfolio(): Promise<PortfolioSummary> {
+    return this.fetchJson<PortfolioSummary>('/portfolio/rebalance', { method: 'POST' });
   }
 
   async getDecision(id: string): Promise<DecisionPacket> {
