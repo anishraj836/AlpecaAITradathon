@@ -282,6 +282,7 @@ class MarketContext(BaseModel):
     volume: int
     vwap: Optional[float] = None
     timestamp: str
+    news: Optional[List[Dict[str, Any]]] = None
 
 class MandatePipelineStep(BaseModel):
     id: str

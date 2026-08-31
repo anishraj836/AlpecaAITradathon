@@ -110,3 +110,6 @@ class AlpacaBrokerGateway(BrokerGateway):
 
     async def get_clock(self) -> dict:
         return await self.market_service.get_clock()
+
+    async def get_news(self, symbol: str, limit: int = 5) -> list:
+        return await self.market_service.get_news(symbol, limit=limit)

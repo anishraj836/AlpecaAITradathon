@@ -108,3 +108,54 @@ class AlpacaMarketDataService:
             "next_close": "16:00:00 EST",
             "market_status": "OPEN" if is_open else "CLOSED",
         }
+
+    async def get_news(self, symbol: str, limit: int = 5) -> list:
+        """
+        Fetch real-time market news headlines and summaries from Alpaca News API (GET /v2/news).
+        """
+        symbol = symbol.upper()
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            # Deterministic news fixture for testing and offline modes
+            return [
+                {
+                    "headline": f"{symbol} consolidates in low-dispersion corridor as options skew reflects tail protection",
+                    "summary": f"Options trading volume on {symbol} reflects steady institutional hedging with elevated downside put demand.",
+                    "source": "MarketWatch Wire",
+                    "symbols": [symbol],
+                    "created_at": "2026-08-31T12:30:00Z",
+                },
+                {
+                    "headline": f"Macro volatility indices contract as equity markets absorb economic growth metrics",
+                    "summary": "Large cap ETF implied volatility remains compressed across 30-day front-month expiries.",
+                    "source": "Alpaca Financial Feed",
+                    "symbols": [symbol],
+                    "created_at": "2026-08-31T11:00:00Z",
+                },
+            ]
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.ALPACA_DATA_URL}/v2/news",
+                    headers=self.headers,
+                    params={"symbols": symbol, "limit": limit, "include_content": "false"},
+                    timeout=8.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_news = data.get("news", [])
+                    return [
+                        {
+                            "headline": item.get("headline", ""),
+                            "summary": item.get("summary", ""),
+                            "source": item.get("source", "Alpaca"),
+                            "url": item.get("url", ""),
+                            "symbols": item.get("symbols", [symbol]),
+                            "created_at": item.get("created_at", ""),
+                        }
+                        for item in raw_news
+                    ]
+        except Exception:
+            pass
+
+        return []

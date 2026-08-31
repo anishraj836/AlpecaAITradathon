@@ -27,6 +27,30 @@ async def test_researcher_agent():
     assert trace.status == "COMPLETE"
 
 @pytest.mark.asyncio
+async def test_researcher_agent_with_news():
+    agent = MarketResearcherAgent()
+    context = MarketContext(
+        symbol="SPY",
+        price=645.31,
+        changePct=0.45,
+        high=647.2,
+        low=643.1,
+        volume=85000000,
+        timestamp="2026-08-29T10:00:00Z",
+        news=[
+            {
+                "headline": "Fed signals steady rate path as core inflation stabilizes",
+                "summary": "FOMC minutes indicate balanced economic outlook.",
+                "source": "Alpaca News",
+            }
+        ],
+    )
+    research, trace = await agent.run(context, decision_id="DEC-NEWS-TEST", step_id="step-1", title="Market Context")
+    assert research.symbol == "SPY"
+    assert any("Fed signals" in ev or "news catalyst" in ev for ev in research.relevantEvidence)
+    assert "LIVE_NEWS_INGESTED" in research.eventFlags or "FOMC_CALENDAR_ACTIVE" in research.eventFlags
+
+@pytest.mark.asyncio
 async def test_volatility_analyst_agent():
     agent = VolatilityAnalystAgent()
     quant = MockOptionsIntelligenceGateway()

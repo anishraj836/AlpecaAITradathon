@@ -117,3 +117,12 @@ async def test_get_clock_broker():
     assert "is_open" in clock
     assert "market_status" in clock
     assert clock["market_status"] in ["OPEN", "CLOSED"]
+
+@pytest.mark.asyncio
+async def test_get_news_broker():
+    broker = AlpacaBrokerGateway()
+    news = await broker.get_news("SPY", limit=5)
+    assert isinstance(news, list)
+    assert len(news) > 0
+    assert "headline" in news[0]
+    assert "summary" in news[0]

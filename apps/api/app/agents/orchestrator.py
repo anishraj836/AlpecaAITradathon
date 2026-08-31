@@ -117,13 +117,19 @@ class VoltronOrchestrator:
             # Stage 1: Market & Account Data (Single Fetch)
             account = await self.broker.get_account()
             market_context = await self.broker.get_market_context(symbol)
+            try:
+                news_items = await self.broker.get_news(symbol, limit=5)
+                market_context.news = news_items
+            except Exception:
+                pass
+
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="market_context_completed",
                 stage="DATA_FETCH",
                 status="COMPLETE",
-                message=f"Retrieved {symbol} spot price: ${market_context.price:.2f}",
-                payload={"spotPrice": market_context.price, "equity": account.equity},
+                message=f"Retrieved {symbol} spot price: ${market_context.price:.2f} ({len(market_context.news or [])} news items ingested)",
+                payload={"spotPrice": market_context.price, "equity": account.equity, "newsCount": len(market_context.news or [])},
             )
 
             # Stage 2: Retrieve Live Option Chain & Volatility Surface (Quant MCP)

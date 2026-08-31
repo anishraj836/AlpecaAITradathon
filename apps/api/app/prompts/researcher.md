@@ -10,6 +10,7 @@ Analyze the provided live broker market context and account state for the target
 - Daily High / Low / Volume / VWAP
 - Day Change Percentage
 - Account Equity & Buying Power
+- Real-Time Alpaca Market News Headlines & Summaries
 
 ## Output JSON Schema
 ```json

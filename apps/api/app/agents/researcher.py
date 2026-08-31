@@ -21,6 +21,12 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
         )
 
     async def _execute_reasoning(self, input_data: MarketContext) -> MarketResearch:
+        # Format news headlines if present
+        news_block = ""
+        if input_data.news:
+            headlines = [f"  • {item.get('headline')} (Source: {item.get('source', 'Alpaca')})" for item in input_data.news[:5]]
+            news_block = f"\nRecent Real-Time Alpaca Market Headlines:\n" + "\n".join(headlines) + "\n"
+
         # 1. Attempt Live LLM Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
         if llm_client.is_configured:
             prompt = (
@@ -30,8 +36,9 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
                 f"- Daily High: ${input_data.high:.2f}\n"
                 f"- Daily Low: ${input_data.low:.2f}\n"
                 f"- Day Change: {input_data.changePct:+.2f}%\n"
-                f"- Volume: {input_data.volume:,} shares\n\n"
-                f"Analyze the market regime, recent price velocity, event risk, and relevant evidence."
+                f"- Volume: {input_data.volume:,} shares\n"
+                f"{news_block}\n"
+                f"Analyze the market regime, recent price velocity, event risk, headline catalysts, and relevant evidence."
             )
             llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,
@@ -68,13 +75,20 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
             f"Trading volume of {input_data.volume:,} shares indicating healthy market depth",
         ]
 
+        event_flags = ["POST_EARNINGS_SEASON", "FOMC_CALENDAR_ACTIVE"]
+        if input_data.news and len(input_data.news) > 0:
+            top_headline = input_data.news[0].get("headline", "")
+            if top_headline:
+                evidence.append(f"Real-time news catalyst: \"{top_headline}\"")
+                event_flags.append("LIVE_NEWS_INGESTED")
+
         summary = f"Identified {regime} with {int(confidence * 100)}% confidence based on compressed intraday dispersion and {input_data.symbol} liquidity."
 
         return MarketResearch(
             symbol=input_data.symbol,
             spotPrice=price,
             marketRegimeSummary=regime,
-            eventFlags=["POST_EARNINGS_SEASON", "FOMC_CALENDAR_ACTIVE"],
+            eventFlags=event_flags,
             relevantEvidence=evidence,
             confidence=confidence,
             summary=summary,

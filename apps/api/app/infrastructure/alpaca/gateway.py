@@ -66,3 +66,7 @@ class BrokerGateway(ABC):
             "next_close": "2026-09-01T16:00:00-04:00",
             "market_status": "OPEN",
         }
+
+    async def get_news(self, symbol: str, limit: int = 5) -> List[dict]:
+        """Retrieve latest market news headlines and catalyst summaries for a symbol."""
+        return []
