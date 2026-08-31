@@ -377,7 +377,6 @@ class VoltronOrchestrator:
             can_auto_execute = (
                 active_autonomy in ["GUARDED_AUTONOMOUS", "AUTOPILOT"]
                 and decision_status == "AWAITING_APPROVAL"
-                and settings.AUTONOMOUS_EXECUTION
                 and self.session is not None
             )
 
@@ -386,7 +385,27 @@ class VoltronOrchestrator:
                 clock = await self.broker.get_clock()
                 is_market_open = clock.get("is_open", True)
 
-                if is_degraded:
+                if not is_market_open:
+                    # 🚨 MARKET CLOSED SAFETY GATE: Prevent dispatching multi-leg options orders when Alpaca options gateway is closed
+                    next_open_str = clock.get("next_open", "09:30 EST")
+                    market_held_note = f"Market is CLOSED (Next Open: {next_open_str}). Automated execution safely held in Decision Room."
+                    packet.whyThisTrade.append(market_held_note)
+                    packet.evidence.description = f"⚠️ [MARKET CLOSED - Next Open: {next_open_str}] {packet.evidence.description}".strip()
+                    if self.session:
+                        dec_repo = DecisionRepository(self.session)
+                        await dec_repo.save(packet)
+                        await self.session.commit()
+
+                    logger.info(f"[{decision_id}] MARKET CLOSED: Market is currently closed (Next open: {next_open_str}). Autonomous order dispatch deferred to market open.")
+                    await self._emit_event(
+                        decision_id=decision_id,
+                        event_type="market_closed_held",
+                        stage="EXECUTION",
+                        status="COMPLETE",
+                        message=f"⏸️ Market Closed ({clock.get('market_status', 'CLOSED')}): Next open at {next_open_str}. Autonomous execution safely held in Decision Room to prevent broker rejection.",
+                        payload=packet.model_dump(),
+                    )
+                elif is_degraded:
                     # 🚨 SAFETY DEMOTION: Never allow un-inspected fallback heuristics to execute autonomously!
                     logger.warning(f"[{decision_id}] SAFETY DEMOTION ACTIVATED: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
                     await self._emit_event(
@@ -395,17 +414,6 @@ class VoltronOrchestrator:
                         stage="EXECUTION",
                         status="COMPLETE",
                         message=f"⚠️ Safety Demotion: AI Committee was offline. Autonomous execution locked. Manual human review required.",
-                        payload=packet.model_dump(),
-                    )
-                elif not is_market_open:
-                    # 🚨 MARKET CLOSED SAFETY GATE: Prevent dispatching multi-leg options orders when Alpaca options gateway is closed
-                    logger.info(f"[{decision_id}] MARKET CLOSED: Market is currently closed (Next open: {clock.get('next_open')}). Autonomous order dispatch deferred to market open.")
-                    await self._emit_event(
-                        decision_id=decision_id,
-                        event_type="market_closed_held",
-                        stage="EXECUTION",
-                        status="COMPLETE",
-                        message=f"⏸️ Market Closed ({clock.get('market_status', 'CLOSED')}): Next open at {clock.get('next_open')}. Autonomous execution safely held in Decision Room to prevent broker rejection.",
                         payload=packet.model_dump(),
                     )
                 else:

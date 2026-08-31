@@ -123,4 +123,6 @@ async def test_orchestrator_market_closed_held(monkeypatch):
         assert packet.riskCompilerResult.isApproved is True
         # Must be held in AWAITING_APPROVAL because market is closed
         assert packet.status == "AWAITING_APPROVAL"
+        assert any("Market is CLOSED" in note for note in packet.whyThisTrade)
+        assert "MARKET CLOSED" in packet.evidence.description
 
