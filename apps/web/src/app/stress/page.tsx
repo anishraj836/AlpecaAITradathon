@@ -17,6 +17,7 @@ export default function PayoffStressLabPage() {
   const [targetDelta, setTargetDelta] = useState<number>(0.15);
   const [horizonDte, setHorizonDte] = useState<number>(45);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; price: number; pnlExp: number; pnlT0: number } | null>(null);
 
   // Spot prices
@@ -34,7 +35,8 @@ export default function PayoffStressLabPage() {
     let isMounted = true;
     const loadData = async () => {
       try {
-        const fetchedStrategies = await api.getStrategyCandidates(selectedSymbol);
+        const budgetNum = parseFloat(riskBudget.replace(/[^0-9.]/g, '')) || 50000;
+        const fetchedStrategies = await api.getStrategyCandidates(selectedSymbol, targetDelta, budgetNum);
         if (isMounted && fetchedStrategies && fetchedStrategies.length > 0) {
           setStrategies(fetchedStrategies);
           const defaultStrat = fetchedStrategies[0];
@@ -71,20 +73,38 @@ export default function PayoffStressLabPage() {
     }
   };
 
-  // Re-run simulation
-  const handleRerun = async () => {
+  // Re-run simulation with live parameters
+  const handleRerun = async (newDelta: number = targetDelta, newDte: number = horizonDte) => {
     setIsSimulating(true);
+    setSuccessToast(null);
     try {
-      const fetched = await api.getStrategyCandidates(selectedSymbol);
+      const budgetNum = parseFloat(riskBudget.replace(/[^0-9.]/g, '')) || 50000;
+      const fetched = await api.getStrategyCandidates(selectedSymbol, newDelta, budgetNum);
       if (fetched && fetched.length > 0) {
         setStrategies(fetched);
+        const match = fetched.find((s) => s.id === selectedStrategyId) || fetched[0];
+        setSelectedStrategyId(match.id);
+        const refreshed = await api.getStressReport(match.id);
+        if (refreshed) {
+          setStressReport({
+            ...refreshed,
+            assumptions: {
+              ...refreshed.assumptions,
+              riskBudget: budgetNum,
+              targetDelta: newDelta,
+              evaluationHorizonDays: newDte,
+            },
+          });
+        }
+        setSuccessToast(
+          `✓ Recalculated 21-scenario Black-Scholes stress matrix with ${newDelta}Δ wings & ${newDte}D DTE for ${selectedSymbol}!`
+        );
       }
-      const refreshed = await api.getStressReport(selectedStrategyId);
-      setStressReport(refreshed);
     } catch (err) {
       console.warn('Re-run simulation fallback:', err);
     } finally {
-      setTimeout(() => setIsSimulating(false), 400);
+      setTimeout(() => setIsSimulating(false), 300);
+      setTimeout(() => setSuccessToast(null), 5000);
     }
   };
 
@@ -339,7 +359,11 @@ export default function PayoffStressLabPage() {
                   max="0.35"
                   step="0.05"
                   value={targetDelta}
-                  onChange={(e) => setTargetDelta(parseFloat(e.target.value))}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setTargetDelta(v);
+                    handleRerun(v, horizonDte);
+                  }}
                   className="w-full accent-primary cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-outline font-mono">
@@ -354,7 +378,11 @@ export default function PayoffStressLabPage() {
                 </label>
                 <select
                   value={horizonDte}
-                  onChange={(e) => setHorizonDte(parseInt(e.target.value, 10))}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setHorizonDte(v);
+                    handleRerun(targetDelta, v);
+                  }}
                   className="w-full bg-background text-on-surface font-data-md text-data-md p-2.5 outline-none border border-outline-variant/30 focus:border-primary/50 transition-all rounded-sm font-mono"
                 >
                   <option value={7}>7 Days (Weekly)</option>
@@ -379,7 +407,7 @@ export default function PayoffStressLabPage() {
 
             <button
               type="button"
-              onClick={handleRerun}
+              onClick={() => handleRerun(targetDelta, horizonDte)}
               disabled={isSimulating}
               className="mt-5 w-full bg-primary text-on-primary font-data-md text-data-md py-3 uppercase tracking-wider hover:bg-primary-fixed-dim transition-all flex items-center justify-center gap-2 rounded-sm font-bold shadow-glow-primary disabled:opacity-50"
             >
@@ -393,6 +421,14 @@ export default function PayoffStressLabPage() {
 
         {/* Right Main Data Area */}
         <div className="flex flex-col flex-1 gap-gutter min-w-0">
+          {/* Success Toast Banner */}
+          {successToast && (
+            <div className="bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 px-4 py-2.5 rounded-sm flex items-center gap-2 font-mono text-xs shadow-lg animate-in fade-in slide-in-from-top-1">
+              <span className="material-symbols-outlined text-[18px] text-emerald-400">check_circle</span>
+              <span className="font-bold">{successToast}</span>
+            </div>
+          )}
+
           {/* Interactive Payoff Chart Panel */}
           <div className="flex flex-col p-4 bg-surface-container relative min-h-[340px] rounded-sm border border-outline-variant/20 shadow-md">
             <div className="flex justify-between items-start mb-2 z-10 relative">

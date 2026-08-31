@@ -26,7 +26,7 @@ export interface ApiClient {
   approveDecision(id: string): Promise<OrderResult>;
   rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }>;
   getVolSurface(underlying?: string): Promise<VolatilitySurface>;
-  getStrategyCandidates(underlying?: string): Promise<StrategyCandidate[]>;
+  getStrategyCandidates(underlying?: string, targetDelta?: number, budget?: number): Promise<StrategyCandidate[]>;
   getStressReport(strategyId?: string): Promise<StressReport>;
   getAgentTrace(decisionId?: string): Promise<AgentTraceStep[]>;
   getActiveOperation(): Promise<ActiveOperationState>;
@@ -95,8 +95,14 @@ class HttpSseApiAdapter implements ApiClient {
     return this.fetchJson<VolatilitySurface>(`/quant/surface?symbol=${underlying}`);
   }
 
-  async getStrategyCandidates(underlying: string = 'SPY'): Promise<StrategyCandidate[]> {
-    return this.fetchJson<StrategyCandidate[]>(`/quant/strategies?symbol=${underlying}`);
+  async getStrategyCandidates(
+    underlying: string = 'SPY',
+    targetDelta: number = 0.15,
+    budget: number = 50000.0
+  ): Promise<StrategyCandidate[]> {
+    return this.fetchJson<StrategyCandidate[]>(
+      `/quant/strategies?symbol=${underlying}&target_delta=${targetDelta}&budget=${budget}`
+    );
   }
 
   async getStressReport(strategyId: string = 'strat-condor-01'): Promise<StressReport> {
