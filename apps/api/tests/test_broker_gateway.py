@@ -54,3 +54,58 @@ async def test_place_multileg_order_broker():
     assert result.decisionId == "DEC-TEST-01"
     assert result.status in ["accepted", "filled"]
     assert result.broker == "ALPACA_PAPER"
+
+@pytest.mark.asyncio
+async def test_place_multileg_order_via_mcp_success(monkeypatch):
+    """
+    Verify that when AlpacaOfficialMCPClient responds successfully,
+    AlpacaBrokerGateway returns the MCP-sourced OrderResult rather than falling through to REST.
+    """
+    broker = AlpacaBrokerGateway()
+    quant = MockOptionsIntelligenceGateway()
+    strategy = (await quant.generate_candidates("SPY"))[0]
+
+    decision = DecisionPacket(
+        id="DEC-TEST-MCP-01",
+        createdAt="2026-08-29T10:00:00Z",
+        underlying="SPY",
+        spotPrice=645.31,
+        marketRegime="Range-Bound",
+        iv30=18.4,
+        ivRank=72.1,
+        aiConfidence=0.81,
+        strategy=strategy,
+        evidence={"description": "MCP order test", "putSkewElevated": True, "termStructureRich": True},
+        whyThisTrade=["MCP test"],
+        criticAnalysis={"primaryFailureMode": "None", "details": "MCP test"},
+        riskCompilerResult=await quant.compile_risk(strategy, 1000000.0),
+        status="AWAITING_APPROVAL",
+    )
+
+    mcp_tool_calls = []
+
+    async def mock_call_mcp_tool(tool_name: str, arguments: dict):
+        mcp_tool_calls.append({"tool": tool_name, "args": arguments})
+        if tool_name == "alpaca_place_multileg_order":
+            return {
+                "id": "MCP-ORD-88888",
+                "client_order_id": "cl-DEC-TEST-MCP-01",
+                "status": "filled",
+                "filled_avg_price": 1.42,
+                "filled_qty": 1,
+            }
+        return {"error": "Unknown tool"}
+
+    monkeypatch.setattr(broker.mcp_client, "call_mcp_tool", mock_call_mcp_tool)
+
+    result = await broker.place_multileg_order(decision)
+
+    # Must be the MCP-sourced order result
+    assert result.orderId == "MCP-ORD-88888"
+    assert result.decisionId == "DEC-TEST-MCP-01"
+    assert result.status == "filled"
+    assert result.avgPrice == 1.42
+    assert len(mcp_tool_calls) == 1
+    assert mcp_tool_calls[0]["tool"] == "alpaca_place_multileg_order"
+    assert mcp_tool_calls[0]["args"]["order_class"] == "mleg"
+    assert len(mcp_tool_calls[0]["args"]["legs"]) == len(strategy.legs)
