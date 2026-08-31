@@ -46,18 +46,34 @@ class JsonRpcResponse(BaseModel):
 TICKER_DEFAULT_SPOTS: Dict[str, float] = {
     "SPY": 645.31,
     "QQQ": 510.00,
-    "NVDA": 130.00,
-    "AAPL": 230.00,
-    "TSLA": 220.00,
-    "IWM": 220.00,
-    "MSFT": 420.00,
-    "AMZN": 180.00,
-    "META": 520.00,
-    "AMD": 150.00,
+    "NVDA": 138.50,
+    "AAPL": 228.40,
+    "TSLA": 215.10,
+    "IWM": 224.50,
+    "MSFT": 425.00,
+    "AMZN": 186.00,
+    "META": 528.00,
+    "GOOGL": 168.00,
+    "AMD": 154.00,
+    "PLTR": 34.50,
+    "COIN": 212.00,
+    "SMCI": 448.00,
+    "ARM": 134.00,
+    "DIS": 96.00,
+    "NFLX": 685.00,
+    "AVGO": 162.00,
+    "UBER": 76.50,
+    "BABA": 88.00,
+    "BA": 162.00,
 }
 
 def get_spot_for_ticker(symbol: str) -> float:
-    return TICKER_DEFAULT_SPOTS.get(symbol.upper(), 500.0)
+    sym = symbol.upper()
+    if sym in TICKER_DEFAULT_SPOTS:
+        return TICKER_DEFAULT_SPOTS[sym]
+    # Deterministic spot price generation for ANY arbitrary custom ticker
+    hash_val = sum(ord(c) for c in sym)
+    return round(50.0 + (hash_val % 350) + 0.50, 2)
 
 def handle_get_surface(
     symbol: str,

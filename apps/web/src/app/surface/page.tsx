@@ -7,31 +7,35 @@ import { VolatilitySurface } from '@/types/voltron';
 import { DEMO_VOL_SURFACE } from '@/fixtures/voltronFixtures';
 import { VolSurface3DCanvas } from '@/components/surface/VolSurface3DCanvas';
 
+const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
+
 type SurfaceViewMode = '3D' | 'HEATMAP' | 'SMILE';
 
 export default function VolatilitySurfacePage() {
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
+  const [customTickerInput, setCustomTickerInput] = useState<string>('');
   const [surfaceData, setSurfaceData] = useState<VolatilitySurface>(DEMO_VOL_SURFACE);
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
   const [isScanning, setIsScanning] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    api.getVolSurface('SPY').then((data) => {
-      if (isMounted) setSurfaceData(data);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const handleRunScan = async () => {
+  const loadSurface = async (symbol: string) => {
     setIsScanning(true);
     try {
-      const refreshed = await api.getVolSurface('SPY');
+      const refreshed = await api.getVolSurface(symbol);
       setSurfaceData(refreshed);
+    } catch (err) {
+      console.warn('Failed to load surface:', err);
     } finally {
-      setTimeout(() => setIsScanning(false), 600);
+      setIsScanning(false);
     }
+  };
+
+  useEffect(() => {
+    loadSurface(selectedSymbol);
+  }, [selectedSymbol]);
+
+  const handleRunScan = async () => {
+    await loadSurface(selectedSymbol);
   };
 
   return (
@@ -42,19 +46,63 @@ export default function VolatilitySurfacePage() {
         <div className="flex-1 bg-surface-container relative rounded-sm border border-outline-variant/30 flex flex-col overflow-hidden shadow-md">
           {/* Top Bar */}
           <div className="flex items-center justify-between p-panel-padding border-b border-outline-variant/30 bg-surface/80 backdrop-blur-sm z-10">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <h2 className="font-headline-md text-headline-md text-on-surface font-semibold">
                 Implied Volatility Surface
               </h2>
               <div className="h-4 w-px bg-outline-variant" />
+              
+              {/* Custom Ticker Input Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (customTickerInput.trim()) {
+                    const sym = customTickerInput.trim().toUpperCase();
+                    setSelectedSymbol(sym);
+                    setCustomTickerInput('');
+                  }
+                }}
+                className="flex items-center gap-1.5 bg-surface border border-outline-variant/40 focus-within:border-primary/60 rounded-sm px-2 py-0.5 transition-all shadow-inner"
+              >
+                <span className="material-symbols-outlined text-[14px] text-outline">search</span>
+                <input
+                  type="text"
+                  placeholder="Ticker (e.g. PLTR, AMD)..."
+                  value={customTickerInput}
+                  onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase())}
+                  className="bg-transparent text-xs font-mono text-on-surface uppercase w-36 outline-none placeholder:text-outline/60 font-bold"
+                />
+                <button
+                  type="submit"
+                  className="px-2 py-0.5 bg-primary text-on-primary hover:bg-primary-fixed-dim text-[10px] font-mono font-bold rounded-sm transition-colors"
+                >
+                  SCAN
+                </button>
+              </form>
+
+              {/* Quick Chips */}
+              <div className="hidden xl:flex items-center gap-1 bg-surface p-0.5 border border-outline-variant/30 rounded-sm">
+                {QUICK_SYMBOLS.slice(0, 5).map((sym) => (
+                  <button
+                    key={sym}
+                    type="button"
+                    onClick={() => setSelectedSymbol(sym)}
+                    className={`px-1.5 py-0.5 text-[11px] font-mono font-bold rounded-sm transition-all ${
+                      selectedSymbol === sym
+                        ? 'bg-primary text-on-primary shadow-sm'
+                        : 'text-on-surface-variant hover:text-primary hover:bg-surface-container-high'
+                    }`}
+                  >
+                    {sym}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex gap-2 items-center">
-                <span className="px-2 py-0.5 rounded-sm bg-primary/10 border border-primary/30 font-label-xs text-label-xs text-primary font-mono">
+                <span className="px-2 py-0.5 rounded-sm bg-primary/10 border border-primary/30 font-label-xs text-label-xs text-primary font-mono font-bold">
                   {surfaceData.underlying}
                 </span>
-                <span className="px-2 py-0.5 rounded-sm bg-surface-variant text-on-surface-variant font-label-xs text-label-xs">
-                  EQUITY
-                </span>
-                <span className="font-data-md text-data-md text-primary-fixed-dim font-mono ml-2">
+                <span className="font-data-md text-data-md text-primary font-mono ml-1 font-bold">
                   ${surfaceData.spotPrice.toFixed(2)}
                 </span>
               </div>
@@ -78,9 +126,18 @@ export default function VolatilitySurfacePage() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={handleRunScan}
+                disabled={isScanning}
+                className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary font-data-sm text-data-sm hover:bg-primary/20 transition-colors rounded-sm flex items-center gap-1 font-mono"
+              >
+                <span className={`material-symbols-outlined text-[14px] ${isScanning ? 'animate-spin' : ''}`}>sync</span>
+                <span>Refresh</span>
+              </button>
               <Link
                 href="/tournament"
-                className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary font-data-sm text-data-sm hover:bg-primary/20 transition-colors rounded-sm flex items-center gap-1"
+                className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary font-data-sm text-data-sm hover:bg-primary/20 transition-colors rounded-sm flex items-center gap-1 font-mono"
               >
                 <span>Tournament</span>
                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>

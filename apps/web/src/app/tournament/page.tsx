@@ -6,19 +6,30 @@ import { api } from '@/lib/api';
 import { StrategyCandidate } from '@/types/voltron';
 import { DEMO_STRATEGY_CANDIDATES } from '@/fixtures/voltronFixtures';
 
+const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
+
 export default function OpportunityScannerPage() {
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
+  const [customTickerInput, setCustomTickerInput] = useState<string>('');
   const [strategies, setStrategies] = useState<StrategyCandidate[]>(DEMO_STRATEGY_CANDIDATES);
   const [sortBy, setSortBy] = useState<'score' | 'pop'>('score');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const loadTournament = async (symbol: string) => {
+    setIsLoading(true);
+    try {
+      const data = await api.getStrategyCandidates(symbol);
+      if (data && data.length > 0) setStrategies(data);
+    } catch (err) {
+      console.warn('Failed to load tournament candidates:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    api.getStrategyCandidates('SPY').then((data) => {
-      if (isMounted) setStrategies(data);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    loadTournament(selectedSymbol);
+  }, [selectedSymbol]);
 
   const rankedCandidates = strategies.filter((s) => !s.rejectionReason);
   const rejectedCandidates = strategies.filter((s) => s.rejectionReason);
@@ -35,11 +46,59 @@ export default function OpportunityScannerPage() {
           <h1 className="font-display-lg text-display-lg text-primary tracking-tighter uppercase font-bold">
             Opportunity Scanner (Strategy Tournament)
           </h1>
-          <div className="flex items-center gap-2 px-3 py-1 bg-surface-container-high border border-primary/20 rounded-sm">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-widest font-mono">
-              Tournament Complete
-            </span>
+          <div className="flex items-center gap-3">
+            {/* Custom Ticker Search Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (customTickerInput.trim()) {
+                  const sym = customTickerInput.trim().toUpperCase();
+                  setSelectedSymbol(sym);
+                  setCustomTickerInput('');
+                }
+              }}
+              className="flex items-center gap-1.5 bg-surface border border-outline-variant/40 focus-within:border-primary/60 rounded-sm px-2.5 py-1 transition-all shadow-inner"
+            >
+              <span className="material-symbols-outlined text-[14px] text-outline">search</span>
+              <input
+                type="text"
+                placeholder="Ticker (e.g. PLTR, AMD)..."
+                value={customTickerInput}
+                onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase())}
+                className="bg-transparent text-xs font-mono text-on-surface uppercase w-36 outline-none placeholder:text-outline/60 font-bold"
+              />
+              <button
+                type="submit"
+                className="px-2 py-0.5 bg-primary text-on-primary hover:bg-primary-fixed-dim text-[10px] font-mono font-bold rounded-sm transition-colors"
+              >
+                SCAN
+              </button>
+            </form>
+
+            {/* Quick Chips */}
+            <div className="hidden xl:flex items-center gap-1 bg-surface p-0.5 border border-outline-variant/30 rounded-sm">
+              {QUICK_SYMBOLS.slice(0, 6).map((sym) => (
+                <button
+                  key={sym}
+                  type="button"
+                  onClick={() => setSelectedSymbol(sym)}
+                  className={`px-2 py-0.5 text-xs font-mono font-bold rounded-sm transition-all ${
+                    selectedSymbol === sym
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant hover:text-primary hover:bg-surface-container-high'
+                  }`}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-1 bg-surface-container-high border border-primary/20 rounded-sm">
+              <span className={`w-2 h-2 rounded-full bg-primary ${isLoading ? 'animate-ping' : 'animate-pulse'}`} />
+              <span className="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-widest font-mono">
+                {isLoading ? 'Simulating...' : 'Tournament Complete'}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4 font-mono">
@@ -47,7 +106,7 @@ export default function OpportunityScannerPage() {
             {strategies.length} STRUCTURES EVALUATED
           </span>
           <span className="font-body-sm text-body-sm text-on-surface-variant font-sans">
-            | Underlying: <span className="text-primary-fixed-dim font-mono font-bold">SPY</span> | Target: <span className="text-on-surface">Theta Decay / Directional Neutral</span>
+            | Underlying: <span className="text-primary-fixed-dim font-mono font-bold">{selectedSymbol}</span> | Target: <span className="text-on-surface">Theta Decay / Defined Risk</span>
           </span>
         </div>
       </div>

@@ -6,10 +6,11 @@ import { api } from '@/lib/api';
 import { StressReport, StrategyCandidate, OptionLeg } from '@/types/voltron';
 import { DEMO_STRESS_REPORT, DEMO_STRATEGY_CANDIDATES } from '@/fixtures/voltronFixtures';
 
-const SUPPORTED_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA'];
+const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
 
 export default function PayoffStressLabPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
+  const [customTickerInput, setCustomTickerInput] = useState<string>('');
   const [strategies, setStrategies] = useState<StrategyCandidate[]>(DEMO_STRATEGY_CANDIDATES);
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('strat-condor-01');
   const [stressReport, setStressReport] = useState<StressReport>(DEMO_STRESS_REPORT);
@@ -20,15 +21,30 @@ export default function PayoffStressLabPage() {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; price: number; pnlExp: number; pnlT0: number } | null>(null);
 
-  // Spot prices
-  const spotPrices: Record<string, number> = {
-    SPY: 769.28,
-    QQQ: 645.31,
-    NVDA: 138.50,
-    AAPL: 228.40,
-    TSLA: 215.10,
+  // Dynamic spot price resolver for ANY custom ticker
+  const getSpot = (sym: string): number => {
+    const table: Record<string, number> = {
+      SPY: 769.28,
+      QQQ: 645.31,
+      NVDA: 138.50,
+      AAPL: 228.40,
+      TSLA: 215.10,
+      IWM: 224.50,
+      MSFT: 425.00,
+      AMZN: 186.00,
+      META: 528.00,
+      GOOGL: 168.00,
+      AMD: 154.00,
+      PLTR: 34.50,
+      COIN: 212.00,
+      SMCI: 448.00,
+      ARM: 134.00,
+    };
+    if (table[sym]) return table[sym];
+    const hash = sym.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    return Math.round((50 + (hash % 350) + 0.5) * 100) / 100;
   };
-  const currentSpot = spotPrices[selectedSymbol] || 769.28;
+  const currentSpot = getSpot(selectedSymbol);
 
   // Fetch strategies and stress report on symbol change
   useEffect(() => {
@@ -256,16 +272,44 @@ export default function PayoffStressLabPage() {
           </div>
         </div>
 
-        {/* Symbol & Quick Controls */}
+        {/* Symbol & Custom Ticker Input */}
         <div className="flex gap-3 items-center relative z-10">
-          <div className="flex items-center gap-1.5 bg-surface p-1 border border-outline-variant/30 rounded-sm">
-            <span className="text-[10px] font-mono uppercase text-outline px-2 font-semibold">Underlying:</span>
-            {SUPPORTED_SYMBOLS.map((sym) => (
+          {/* Custom Ticker Input Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (customTickerInput.trim()) {
+                const sym = customTickerInput.trim().toUpperCase();
+                setSelectedSymbol(sym);
+                setCustomTickerInput('');
+              }
+            }}
+            className="flex items-center gap-1.5 bg-surface border border-outline-variant/40 focus-within:border-primary/60 rounded-sm px-2.5 py-1 transition-all shadow-inner"
+          >
+            <span className="material-symbols-outlined text-[16px] text-outline">search</span>
+            <input
+              type="text"
+              placeholder="Type ticker (e.g. PLTR, MSFT)..."
+              value={customTickerInput}
+              onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase())}
+              className="bg-transparent text-xs font-mono text-on-surface uppercase w-48 outline-none placeholder:text-outline/60 font-bold"
+            />
+            <button
+              type="submit"
+              className="px-2.5 py-1 bg-primary text-on-primary hover:bg-primary-fixed-dim text-[11px] font-mono font-bold rounded-sm transition-colors shadow-sm"
+            >
+              SCAN
+            </button>
+          </form>
+
+          {/* Quick Popular Ticker Chips */}
+          <div className="hidden lg:flex items-center gap-1 bg-surface p-1 border border-outline-variant/30 rounded-sm overflow-x-auto max-w-md">
+            {QUICK_SYMBOLS.slice(0, 7).map((sym) => (
               <button
                 key={sym}
                 type="button"
                 onClick={() => setSelectedSymbol(sym)}
-                className={`px-2.5 py-1 text-xs font-mono font-bold rounded-sm transition-all ${
+                className={`px-2 py-0.5 text-xs font-mono font-bold rounded-sm transition-all ${
                   selectedSymbol === sym
                     ? 'bg-primary text-on-primary shadow-sm'
                     : 'text-on-surface-variant hover:text-primary hover:bg-surface-container-high'
@@ -280,7 +324,7 @@ export default function PayoffStressLabPage() {
 
           <div className="px-3 py-1.5 bg-surface-container-low text-on-surface-variant font-data-sm text-data-sm uppercase tracking-widest flex items-center gap-2 border border-outline-variant/30 font-mono">
             <div className="w-2 h-2 bg-tertiary-container animate-pulse rounded-full" />
-            <span className="font-bold text-primary">${currentSpot.toFixed(2)}</span>
+            <span className="font-bold text-primary">{selectedSymbol} ${currentSpot.toFixed(2)}</span>
           </div>
         </div>
       </div>
