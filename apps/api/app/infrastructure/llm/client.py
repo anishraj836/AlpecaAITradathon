@@ -54,17 +54,31 @@ class LLMClient:
         user_prompt: str,
         response_model: Type[T],
         temperature: float = 0.2,
+        cache_key: Optional[str] = None,
     ) -> Optional[T]:
         """
         Generate structured output adhering to the Pydantic response_model.
-        Falls back to None if provider fails or is unconfigured.
+        Respects RateLimitGuard to prevent 429 quota exhaustion.
         """
-        return await self._provider.generate_structured(
+        from app.infrastructure.llm.rate_limiter import quota_guard
+
+        if cache_key:
+            cached = quota_guard.get_cached(cache_key)
+            if cached and isinstance(cached, response_model):
+                return cached
+
+        # Paces request through sliding window limiter
+        await quota_guard.acquire_slot()
+
+        res = await self._provider.generate_structured(
             system_instruction=system_instruction,
             user_prompt=user_prompt,
             response_model=response_model,
             temperature=temperature,
         )
+        if res and cache_key:
+            quota_guard.set_cached(cache_key, res)
+        return res
 
 # Global singleton client instance
 llm_client = LLMClient()

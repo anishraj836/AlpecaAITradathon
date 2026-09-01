@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # Google Gemini
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
 
     # OpenAI
     OPENAI_API_KEY: Optional[str] = None

@@ -11,12 +11,12 @@ T = TypeVar("T", bound=BaseModel)
 class GeminiProvider(BaseLLMProvider):
     """
     Google Gemini LLM Provider with native structured JSON output schema support.
-    Supports gemini-3.5-flash-lite, gemini-3.6-flash, gemini-2.5-pro, etc.
+    Supports gemini-3.6-flash, gemini-3.5-flash-lite, with automatic quota fallback.
     """
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self._api_key = api_key
-        self._model = model or "gemini-3.5-flash-lite"
+        self._model = model or "gemini-3.6-flash"
         self._base_url = "https://generativelanguage.googleapis.com/v1beta"
 
     @property
@@ -42,8 +42,6 @@ class GeminiProvider(BaseLLMProvider):
             logger.debug("Gemini API key not configured. Skipping LLM call.")
             return None
 
-        url = f"{self._base_url}/models/{self._model}:generateContent?key={self._api_key}"
-        
         schema_dict = response_model.model_json_schema()
         full_system = f"{system_instruction}\n\nIMPORTANT: You must output ONLY a valid JSON object matching this schema:\n{json.dumps(schema_dict, indent=2)}"
 
@@ -63,31 +61,46 @@ class GeminiProvider(BaseLLMProvider):
             }
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(url, json=payload)
-                if resp.status_code != 200:
-                    logger.warning(f"Gemini API returned status {resp.status_code}: {resp.text[:300]}")
-                    return None
+        # Try active model first, fallback to alternate model if 429 quota is reached
+        candidate_models = [self._model]
+        if "gemini-3.6-flash" not in candidate_models:
+            candidate_models.append("gemini-3.6-flash")
+        if "gemini-3.5-flash-lite" not in candidate_models:
+            candidate_models.append("gemini-3.5-flash-lite")
 
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    logger.warning("No candidates returned from Gemini.")
-                    return None
+        for mod in candidate_models:
+            url = f"{self._base_url}/models/{mod}:generateContent?key={self._api_key}"
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code == 429:
+                        logger.warning(f"Gemini model {mod} quota exhausted (429). Attempting fallback...")
+                        continue
+                    if resp.status_code != 200:
+                        logger.warning(f"Gemini API ({mod}) returned status {resp.status_code}: {resp.text[:200]}")
+                        continue
 
-                content_parts = candidates[0].get("content", {}).get("parts", [])
-                if not content_parts:
-                    return None
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        logger.warning(f"No candidates returned from Gemini ({mod}).")
+                        continue
 
-                raw_text = content_parts[0].get("text", "").strip()
-                # Remove any markdown codeblocks if model wrapped output in ```json
-                if raw_text.startswith("```"):
-                    raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
+                    content_parts = candidates[0].get("content", {}).get("parts", [])
+                    if not content_parts:
+                        continue
 
-                parsed_dict = json.loads(raw_text)
-                return response_model.model_validate(parsed_dict)
+                    raw_text = content_parts[0].get("text", "").strip()
+                    # Remove any markdown codeblocks if model wrapped output in ```json
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
 
-        except Exception as e:
-            logger.warning(f"Gemini structured generation failed: {e}")
-            return None
+                    parsed_dict = json.loads(raw_text)
+                    logger.info(f"Gemini structured response successfully generated via {mod}.")
+                    return response_model.model_validate(parsed_dict)
+
+            except Exception as e:
+                logger.warning(f"Gemini generation with {mod} failed: {e}")
+                continue
+
+        return None

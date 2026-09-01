@@ -88,8 +88,7 @@ export default function AgentsDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Control Actions
-  const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST', payload?: any) => {
+  const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD', payload?: any) => {
     setActionLoading(true);
     try {
       const updatedDaemon = await api.controlAutonomousDaemon({
@@ -101,6 +100,7 @@ export default function AgentsDashboardPage() {
       else if (action === 'RESUME') setNotification('▶️ Autonomous worker loop resumed.');
       else if (action === 'TRIGGER_SCAN') setNotification(`⚡ Manual scan triggered for ${payload?.symbol || 'watchlist'}.`);
       else if (action === 'SET_AUTONOMY') setNotification(`🛡️ Autonomy level updated to ${payload?.autonomyLevel}.`);
+      else if (action === 'SET_RATE_LIMIT_GUARD') setNotification(payload?.rateLimitGuardEnabled ? '🛡️ Rate-Limit Guard ENABLED (15 RPM Safe Mode).' : '⚡ Rate-Limit Guard DISABLED (Uncapped Turbo Mode).');
       else if (action === 'SET_WATCHLIST') setNotification('📋 Watchlist successfully updated.');
       setTimeout(() => setNotification(null), 4000);
       await fetchTelemetry();
@@ -224,6 +224,30 @@ export default function AgentsDashboardPage() {
               <span>{daemon?.isPaused ? 'RESUME DAEMON' : 'PAUSE DAEMON'}</span>
             </button>
 
+            {/* Rate-Limit Capped Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => handleControl('SET_RATE_LIMIT_GUARD', { rateLimitGuardEnabled: !daemon?.rateLimitGuard })}
+              disabled={actionLoading}
+              title={
+                daemon?.rateLimitGuard
+                  ? "Rate-Limit Guard ACTIVE: Limits calls to 12 RPM, paces agent handoffs with delays, and caches 3-min sentiment to protect Google Free Tier quota (15 RPM / 500 RPD)."
+                  : "Uncapped Turbo Mode: Full speed with zero inter-agent delays. Requires paid API key."
+              }
+              className={`px-3 py-1.5 rounded-sm font-mono text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                daemon?.rateLimitGuard
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25 shadow-xs'
+                  : 'bg-surface text-outline border-outline-variant/40 hover:text-on-surface hover:border-outline'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px] text-emerald-400">
+                {daemon?.rateLimitGuard ? 'verified_user' : 'lock_open'}
+              </span>
+              <span>
+                {daemon?.rateLimitGuard ? 'CAPPED MODE: ON (15 RPM SAFE)' : 'CAPPED MODE: OFF (UNCAPPED)'}
+              </span>
+            </button>
+
             {/* Trigger Immediate Scan */}
             <div className="flex items-center bg-surface border border-outline-variant/40 rounded-sm">
               <input
@@ -247,7 +271,7 @@ export default function AgentsDashboardPage() {
         </div>
 
         {/* Telemetry Metric Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-3 border-t border-outline-variant/20">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t border-outline-variant/20">
           <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
             <span className="text-[10px] font-mono text-outline uppercase">Fleet Status</span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -312,6 +336,22 @@ export default function AgentsDashboardPage() {
               {daemon?.totalDislocationsFound || 0} detected
             </span>
             <span className="text-[9px] font-mono text-outline mt-0.5">Quant MCP Scans</span>
+          </div>
+
+          <div className="bg-surface p-2.5 rounded-sm border border-emerald-500/30 flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-outline uppercase">API Consumption</span>
+              <span className={`material-symbols-outlined text-[13px] ${(daemon?.estimatedRpm || 0) > 12 ? 'text-rose-400' : 'text-emerald-400'}`}>speed</span>
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className={`font-mono text-xs font-bold ${(daemon?.estimatedRpm || 0) > 12 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {daemon?.estimatedRpm || 0}
+              </span>
+              <span className="text-[10px] font-mono text-outline">/ {daemon?.rpmLimit || 15} RPM</span>
+            </div>
+            <span className="text-[9px] font-mono text-emerald-300/80 mt-0.5">
+              {daemon?.rateLimitGuard ? '15 RPM Guard Active' : 'Uncapped'}
+            </span>
           </div>
         </div>
 

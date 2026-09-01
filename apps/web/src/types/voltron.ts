@@ -440,15 +440,19 @@ export interface AutonomousDaemonState {
   totalOrdersExecuted: number;
   totalOrdersRejected: number;
   totalDislocationsFound: number;
+  rateLimitGuard: boolean;
+  estimatedRpm: number;
+  rpmLimit: number;
   lastScanAt?: string;
   nextScanAt?: string;
 }
 
 export interface AutonomousControlRequest {
-  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST';
+  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD';
   autonomyLevel?: AutonomyLevel;
   watchlist?: string[];
   symbol?: string;
+  rateLimitGuardEnabled?: boolean;
 }
 
 export interface AgentsDashboardResponse {

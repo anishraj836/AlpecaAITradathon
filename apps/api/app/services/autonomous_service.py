@@ -17,6 +17,7 @@ from app.services.event_broadcaster import broadcaster
 from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.infrastructure.database.session import async_session_factory
 from app.agents.orchestrator import VoltronOrchestrator
+from app.infrastructure.llm.rate_limiter import quota_guard
 
 logger = logging.getLogger("AutonomousAgentService")
 
@@ -38,8 +39,10 @@ class AutonomousAgentService:
         self._market_status: str = "OPEN"
         self._watchlist: List[str] = ["SPY", "PLTR", "NVDA", "TSLA", "AAPL", "QQQ"]
         self._watchlist_index = 0
-        self._cycle_interval_seconds = 45
+        self._cycle_interval_seconds = 60
         self._current_cycle_seconds = 0
+        self._rate_limit_guard = True
+        quota_guard.set_enabled(True)
         self._total_cycles = 142
         self._total_orders = 19
         self._total_rejected = 7
@@ -183,13 +186,29 @@ class AutonomousAgentService:
 
                 # Fetch real historical decisions to display in console
                 recent_res = await session.execute(
-                    text("SELECT id, underlying, spot_price, market_regime, strategy_name, status, created_at FROM decisions ORDER BY created_at DESC LIMIT 10")
+                    text("SELECT id, underlying, spot_price, market_regime, status, packet_json, created_at FROM decisions ORDER BY created_at DESC LIMIT 10")
                 )
                 rows = recent_res.fetchall()
                 if rows:
                     for row in rows:
-                        d_id, sym, spot, regime, strat_name, status, created_at = row
-                        ts = created_at.strftime("%H:%M:%S") if created_at else datetime.now().strftime("%H:%M:%S")
+                        d_id, sym, spot, regime, status, p_json, created_at = row
+                        strat_name = "Defined-Risk Strategy"
+                        if isinstance(p_json, dict):
+                            strat_name = p_json.get("strategy", {}).get("name", "Defined-Risk Strategy")
+                        elif isinstance(p_json, str):
+                            try:
+                                import json
+                                parsed = json.loads(p_json)
+                                strat_name = parsed.get("strategy", {}).get("name", "Defined-Risk Strategy")
+                            except Exception:
+                                pass
+
+                        if isinstance(created_at, str):
+                            ts = created_at.split(" ")[1] if " " in created_at else created_at[-8:]
+                        elif created_at:
+                            ts = created_at.strftime("%H:%M:%S")
+                        else:
+                            ts = datetime.now().strftime("%H:%M:%S")
                         if status in ('APPROVED', 'EXECUTED'):
                             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "DISPATCH", f"Order Executed: {strat_name} on {sym} (${spot:.2f}). Decision {d_id} verified.", sym, timestamp=ts)
                         elif status == 'REJECTED':
@@ -420,6 +439,9 @@ class AutonomousAgentService:
             totalOrdersExecuted=self._total_orders,
             totalOrdersRejected=self._total_rejected,
             totalDislocationsFound=self._total_dislocations,
+            rateLimitGuard=self._rate_limit_guard,
+            estimatedRpm=quota_guard.get_current_rpm(),
+            rpmLimit=quota_guard.rpm_limit,
             lastScanAt=self._last_scan_at,
             nextScanAt=_now_iso(),
         )
@@ -447,6 +469,16 @@ class AutonomousAgentService:
         elif req.action == "SET_AUTONOMY" and req.autonomyLevel:
             self._autonomy_level = req.autonomyLevel
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Autonomy mode switched to {req.autonomyLevel}.")
+        elif req.action == "SET_RATE_LIMIT_GUARD":
+            enabled = bool(req.rateLimitGuardEnabled)
+            self._rate_limit_guard = enabled
+            quota_guard.set_enabled(enabled)
+            if enabled:
+                self._cycle_interval_seconds = 60
+                self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", "🛡️ Rate-Limit Guard ENABLED: Pacing agent execution to protect Google Free Tier 15 RPM limit.")
+            else:
+                self._cycle_interval_seconds = 30
+                self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "WARNING", "⚡ Rate-Limit Guard DISABLED: Uncapped turbo execution mode active.")
         elif req.action == "SET_WATCHLIST" and req.watchlist:
             self._watchlist = [w.strip().upper() for w in req.watchlist if w.strip()]
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Watchlist updated: {', '.join(self._watchlist)}.")

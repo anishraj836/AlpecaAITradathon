@@ -192,21 +192,20 @@ class VoltronOrchestrator:
                 message="Volatility Analyst interpreting skew and term structure...",
             )
 
-            research_task = self.researcher.run(
+            research_out, trace_1 = await self.researcher.run(
                 input_data=market_context,
                 decision_id=decision_id,
                 step_id="step-1",
                 title="Market Regime Identified",
             )
-            vol_task = self.vol_analyst.run(
+            trace_steps.append(trace_1)
+
+            vol_out, trace_2 = await self.vol_analyst.run(
                 input_data=surface,
                 decision_id=decision_id,
                 step_id="step-2",
                 title="Unusual Put Skew Detected",
             )
-
-            (research_out, trace_1), (vol_out, trace_2) = await asyncio.gather(research_task, vol_task)
-            trace_steps.append(trace_1)
             trace_steps.append(trace_2)
 
             await self._emit_event(

@@ -491,14 +491,18 @@ class AutonomousDaemonState(BaseModel):
     totalOrdersExecuted: int
     totalOrdersRejected: int = 0
     totalDislocationsFound: int
+    rateLimitGuard: bool = True
+    estimatedRpm: float = 0.0
+    rpmLimit: int = 15
     lastScanAt: Optional[str] = None
     nextScanAt: Optional[str] = None
 
 class AutonomousControlRequest(BaseModel):
-    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST']
+    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST', 'SET_RATE_LIMIT_GUARD']
     autonomyLevel: Optional[AutonomyLevel] = None
     watchlist: Optional[List[str]] = None
     symbol: Optional[str] = None
+    rateLimitGuardEnabled: Optional[bool] = None
 
 class AgentsDashboardResponse(BaseModel):
     agents: List[AgentFleetStatus]

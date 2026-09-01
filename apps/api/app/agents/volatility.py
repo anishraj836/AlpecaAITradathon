@@ -35,6 +35,7 @@ class VolatilityAnalystAgent(BaseAgent[VolatilitySurface, VolatilityAnalysis]):
                 system_instruction=self.system_prompt,
                 user_prompt=prompt,
                 response_model=VolatilityAnalysis,
+                cache_key=f"vol:{input_data.underlying}",
             )
             if llm_out:
                 self.last_execution_mode = "LLM_REASONING"

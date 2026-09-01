@@ -44,6 +44,7 @@ class MarketResearcherAgent(BaseAgent[MarketContext, MarketResearch]):
                 system_instruction=self.system_prompt,
                 user_prompt=prompt,
                 response_model=MarketResearch,
+                cache_key=f"research:{input_data.symbol}",
             )
             if llm_out:
                 self.last_execution_mode = "LLM_REASONING"
