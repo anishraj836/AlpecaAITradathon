@@ -4,64 +4,47 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { StressReport, StrategyCandidate, OptionLeg } from '@/types/voltron';
-import { DEMO_STRESS_REPORT, DEMO_STRATEGY_CANDIDATES } from '@/fixtures/voltronFixtures';
 
 const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
 
 export default function PayoffStressLabPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
   const [customTickerInput, setCustomTickerInput] = useState<string>('');
-  const [strategies, setStrategies] = useState<StrategyCandidate[]>(DEMO_STRATEGY_CANDIDATES);
-  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('strat-condor-01');
-  const [stressReport, setStressReport] = useState<StressReport>(DEMO_STRESS_REPORT);
+  const [strategies, setStrategies] = useState<StrategyCandidate[]>([]);
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('');
+  const [stressReport, setStressReport] = useState<StressReport | null>(null);
   const [riskBudget, setRiskBudget] = useState<string>('$50,000');
   const [targetDelta, setTargetDelta] = useState<number>(0.15);
   const [horizonDte, setHorizonDte] = useState<number>(45);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; price: number; pnlExp: number; pnlT0: number } | null>(null);
+  const [currentSpot, setCurrentSpot] = useState<number>(0);
 
-  // Dynamic spot price resolver for ANY custom ticker
-  const getSpot = (sym: string): number => {
-    const table: Record<string, number> = {
-      SPY: 645.31,
-      QQQ: 510.00,
-      NVDA: 138.50,
-      AAPL: 228.40,
-      TSLA: 215.10,
-      IWM: 224.50,
-      MSFT: 425.00,
-      AMZN: 186.00,
-      META: 528.00,
-      GOOGL: 168.00,
-      AMD: 154.00,
-      PLTR: 34.50,
-      COIN: 212.00,
-      SMCI: 448.00,
-      ARM: 134.00,
-    };
-    if (table[sym]) return table[sym];
-    const hash = sym.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return Math.round((50 + (hash % 350) + 0.5) * 100) / 100;
-  };
-  const currentSpot = getSpot(selectedSymbol);
-
-  // Fetch strategies and stress report on symbol change
+  // Fetch live market data, strategies and stress report on symbol change
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
       try {
         const budgetNum = parseFloat(riskBudget.replace(/[^0-9.]/g, '')) || 50000;
-        const fetchedStrategies = await api.getStrategyCandidates(selectedSymbol, targetDelta, budgetNum);
+        const [surface, fetchedStrategies] = await Promise.all([
+          api.getVolSurface(selectedSymbol).catch(() => null),
+          api.getStrategyCandidates(selectedSymbol, targetDelta, budgetNum).catch(() => []),
+        ]);
+
+        if (isMounted && surface && surface.spotPrice) {
+          setCurrentSpot(surface.spotPrice);
+        }
+
         if (isMounted && fetchedStrategies && fetchedStrategies.length > 0) {
           setStrategies(fetchedStrategies);
           const defaultStrat = fetchedStrategies[0];
           setSelectedStrategyId(defaultStrat.id);
-          const report = await api.getStressReport(defaultStrat.id);
+          const report = await api.getStressReport(defaultStrat.id).catch(() => null);
           if (isMounted && report) setStressReport(report);
         }
       } catch (err) {
-        console.warn('Using demo strategy fixtures:', err);
+        console.error('Failed to load live stress data:', err);
       }
     };
     loadData();
@@ -72,7 +55,7 @@ export default function PayoffStressLabPage() {
 
   // Selected Strategy
   const currentStrategy = useMemo(() => {
-    return strategies.find((s) => s.id === selectedStrategyId) || strategies[0] || DEMO_STRATEGY_CANDIDATES[0];
+    return strategies.find((s) => s.id === selectedStrategyId) || strategies[0] || null;
   }, [strategies, selectedStrategyId]);
 
   // Handle Strategy Change
@@ -126,8 +109,12 @@ export default function PayoffStressLabPage() {
 
   // Calculate dynamic payoff points across a spot price grid (S - 12% to S + 12%)
   const chartData = useMemo(() => {
-    const legs: OptionLeg[] = currentStrategy?.legs || [];
-    const netCredit = currentStrategy?.netCreditOrDebit || 0.43;
+    if (!currentStrategy) {
+      return { points: [], minPrice: 0, maxPrice: 0, minPnl: 0, maxPnl: 0 };
+    }
+
+    const legs: OptionLeg[] = currentStrategy.legs || [];
+    const netCredit = currentStrategy.netCreditOrDebit || 0.43;
 
     const minPrice = currentSpot * 0.88;
     const maxPrice = currentSpot * 1.12;
@@ -240,14 +227,25 @@ export default function PayoffStressLabPage() {
   const ivShifts = [-20, 0, 20];
 
   const getCellPnl = (priceShift: number, ivShift: number) => {
+    if (!stressReport || !stressReport.matrix) return 0;
     const found = stressReport.matrix.find(
       (m) => Math.abs(m.priceShiftPct - priceShift) < 0.1 && Math.abs(m.ivShiftPct - ivShift) < 0.1
     );
     if (found) return found.pnl;
     const mult = priceShift === 0 ? 1 : Math.abs(priceShift) <= 1.5 ? 0.7 : -1.8;
     const ivFactor = ivShift > 0 ? 0.8 : 1.15;
-    return Math.round((currentStrategy.maxProfit || 100) * mult * ivFactor);
+    return Math.round((currentStrategy?.maxProfit || 100) * mult * ivFactor);
   };
+
+  if (!stressReport || !currentStrategy) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-3">
+        <span className="material-symbols-outlined text-[42px] text-primary animate-spin">refresh</span>
+        <p className="font-mono text-sm text-on-surface font-bold">Computing Live 21-Scenario Black-Scholes Stress Matrix for {selectedSymbol}...</p>
+        <p className="font-mono text-xs text-outline">Evaluating multi-leg payoff bounds & volatility shocks</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col w-full gap-gutter pb-6">

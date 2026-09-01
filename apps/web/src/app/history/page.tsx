@@ -4,11 +4,10 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { HistoricalDecisionSummary } from '@/types/voltron';
-import { DEMO_DECISION_HISTORY } from '@/fixtures/voltronFixtures';
 
 export default function DecisionHistoryPage() {
-  const [historyItems, setHistoryItems] = useState<HistoricalDecisionSummary[]>(DEMO_DECISION_HISTORY);
-  const [selectedId, setSelectedId] = useState<string>('HIST-001');
+  const [historyItems, setHistoryItems] = useState<HistoricalDecisionSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;

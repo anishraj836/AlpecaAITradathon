@@ -5,7 +5,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ActiveOperationState, MandatePipelineStep, AutonomyLevel } from '@/types/voltron';
-import { DEMO_ACTIVE_OPERATION } from '@/fixtures/voltronFixtures';
+
+const INITIAL_IDLE_OPERATION: ActiveOperationState = {
+  operationId: 'OP-LIVE',
+  mandate: 'Enter mandate to initiate live multi-agent options tournament on Alpaca Paper.',
+  underlying: 'SPY',
+  status: 'IDLE',
+  currentStepIndex: 0,
+  steps: [
+    { id: 'step-1', title: '01. Researcher Agent: Market Regime', status: 'PENDING' },
+    { id: 'step-2', title: '02. Volatility Analyst: Skew & Surface', status: 'PENDING' },
+    { id: 'step-3', title: '03. Strategy Tournament: Lognormal POP', status: 'PENDING' },
+    { id: 'step-4', title: '04. Critic Agent: Tail-Risk Scenarios', status: 'PENDING' },
+    { id: 'step-5', title: '05. Deterministic Risk Compiler Gate', status: 'PENDING' },
+    { id: 'step-6', title: '06. Alpaca Paper MLEG Dispatch', status: 'PENDING' },
+  ],
+};
 
 const EXAMPLE_MANDATES = [
   'Harvest elevated put skew on SPY with defined risk',
@@ -18,7 +33,7 @@ export default function CommandTerminalPage() {
   const router = useRouter();
   const [mandate, setMandate] = useState('Harvest elevated put skew on SPY with defined risk');
   const [autonomyLevel, setAutonomyLevel] = useState<import('@/types/voltron').AutonomyLevel>('GUARDED_AUTONOMOUS');
-  const [operationState, setOperationState] = useState<ActiveOperationState>(DEMO_ACTIVE_OPERATION);
+  const [operationState, setOperationState] = useState<ActiveOperationState>(INITIAL_IDLE_OPERATION);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [degradedNotice, setDegradedNotice] = useState<string | null>(null);

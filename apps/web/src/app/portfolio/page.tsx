@@ -47,84 +47,38 @@ export default function PortfolioPage() {
     };
   }, [selectedPeriod]);
 
-  // Fast-Forward Dynamic Simulation Calculations
-  const defaultEquity = basePortfolio?.account?.equity ?? 100000.0;
-  const defaultCash = basePortfolio?.account?.cash ?? 100000.0;
+  // Real Alpaca Portfolio Calculations
+  const defaultEquity = basePortfolio?.account?.equity ?? 0.0;
+  const defaultCash = basePortfolio?.account?.cash ?? 0.0;
   const defaultUnrealized = basePortfolio?.unrealizedPnl ?? 0.0;
   const defaultRealized = basePortfolio?.realizedTodayPnl ?? 0.0;
   const defaultPositions = basePortfolio?.positions ?? [];
 
-  let activeEquity = defaultEquity;
-  let activeCash = defaultCash;
-  let activeUnrealized = defaultUnrealized;
-  let activeRealized = defaultRealized;
-  let activePositions: PositionInfo[] = [...defaultPositions];
-  let daysElapsed = 0;
-  let scenarioBadge = 'LIVE REAL-TIME (DAY 0)';
-
-  if (scenario === 'DAY_7') {
-    daysElapsed = 7;
-    scenarioBadge = '⏩ TIME-WARP +7 DAYS';
-    activeUnrealized = 194.0;
-    activeEquity = defaultEquity + activeUnrealized;
-    activePositions = [
-      { symbol: 'SPY260918P00625000', qty: 1, side: 'long', marketValue: 80.0, avgEntryPrice: 1.08, unrealizedPl: -28.0, currentPrice: 0.80 },
-      { symbol: 'SPY260918P00630000', qty: -1, side: 'short', marketValue: -115.0, avgEntryPrice: 1.84, unrealizedPl: 69.0, currentPrice: 1.15 },
-      { symbol: 'SPY260918C00660000', qty: -1, side: 'short', marketValue: -75.0, avgEntryPrice: 1.48, unrealizedPl: 73.0, currentPrice: 0.75 },
-      { symbol: 'SPY260918C00665000', qty: 1, side: 'long', marketValue: 40.0, avgEntryPrice: 0.86, unrealizedPl: -46.0, currentPrice: 0.40 },
-    ];
-  } else if (scenario === 'DAY_14_WIN') {
-    daysElapsed = 14;
-    scenarioBadge = '🎯 50% PROFIT TARGET (AUTONOMOUS WIN)';
-    activeUnrealized = 0.0;
-    activeRealized = defaultRealized + 240.0;
-    activeCash = defaultCash + 240.0;
-    activeEquity = defaultEquity + 240.0;
-    activePositions = [];
-  } else if (scenario === 'SHOCK_DROP') {
-    daysElapsed = 3;
-    scenarioBadge = '💥 SHOCK: SPY -3% MARKET CRASH';
-    activeUnrealized = 0.0;
-    activeRealized = defaultRealized - 280.0;
-    activeCash = defaultCash - 280.0;
-    activeEquity = defaultEquity - 280.0;
-    activePositions = [];
-  }
+  const activeEquity = defaultEquity;
+  const activeCash = defaultCash;
+  const activeUnrealized = defaultUnrealized;
+  const activeRealized = defaultRealized;
+  const activePositions: PositionInfo[] = defaultPositions;
+  const daysElapsed = 0;
+  const scenarioBadge = 'LIVE ALPACA BROKERAGE (REAL-TIME)';
 
   const handleApplyScenario = (target: SimScenario) => {
     setScenario(target);
-    if (target === 'REALTIME') {
-      setNotification({ type: 'info', message: 'Reset to live real-time Alpaca account status.' });
-    } else if (target === 'DAY_7') {
-      setNotification({
-        type: 'info',
-        message: '⏩ Fast-Forward +7 Days: Theta time decay (+48.5/day) eroded short liability. Unrealized PnL is now +$194.00 (45% towards profit target).',
-      });
-    } else if (target === 'DAY_14_WIN') {
-      setNotification({
-        type: 'success',
-        message: '🚀 AUTONOMOUS PROFIT TARGET HIT: Spread reached 50% of maximum credit at Day 14. Quant Worker Daemon closed all 4 legs on Alpaca. Realized Gain: +$240.00!',
-      });
-    } else if (target === 'SHOCK_DROP') {
-      setNotification({
-        type: 'warn',
-        message: '🛡️ STOP-LOSS ACTIVATED: SPY plunged -3.0%. Long protective wing capped max loss at -$280.00. Quant risk compiler closed the position to protect capital.',
-      });
-    }
+    setNotification({ type: 'info', message: 'Displaying 100% genuine live Alpaca brokerage state.' });
   };
 
   const account = basePortfolio?.account || {
     accountId: 'PAPER-01',
-    buyingPower: 50000.0,
-    cash: 50000.0,
-    equity: 100000.0,
+    buyingPower: 0.0,
+    cash: 0.0,
+    equity: 0.0,
     status: 'ACTIVE' as const,
     currency: 'USD',
   };
-  const netDelta = basePortfolio?.netDelta ?? 0.12;
-  const netTheta = basePortfolio?.netTheta ?? 48.5;
-  const netVega = basePortfolio?.netVega ?? -12.4;
-  const netGamma = basePortfolio?.netGamma ?? 0.008;
+  const netDelta = basePortfolio?.netDelta ?? 0.0;
+  const netTheta = basePortfolio?.netTheta ?? 0.0;
+  const netVega = basePortfolio?.netVega ?? 0.0;
+  const netGamma = basePortfolio?.netGamma ?? 0.0;
   const profitTargetPct = basePortfolio?.profitTargetPct ?? 50.0;
 
   // Construct Net Worth Chart Data Points
@@ -1020,46 +974,36 @@ export default function PortfolioPage() {
             </h3>
 
             <div className="flex flex-col gap-2.5 font-mono text-xs">
-              {(basePortfolio.diversification?.allocations || [
-                { symbol: 'SPY', assetClass: 'Macro Core Index', weightPct: 35.0, allocatedAmount: 35000.0, currentPnl: 84.0, beta: 1.00, ivRank: 68.2, strategyType: 'Iron Condor (15Δ)' },
-                { symbol: 'QQQ', assetClass: 'Tech Growth Beta', weightPct: 25.0, allocatedAmount: 25000.0, currentPnl: 62.0, beta: 1.25, ivRank: 74.5, strategyType: 'Put Credit Spread (25Δ)' },
-                { symbol: 'IWM', assetClass: 'Small-Cap Cyclical', weightPct: 20.0, allocatedAmount: 20000.0, currentPnl: -18.0, beta: 1.15, ivRank: 61.0, strategyType: 'Iron Condor (20Δ)' },
-                { symbol: 'GLD', assetClass: 'Macro Safe-Haven', weightPct: 10.0, allocatedAmount: 10000.0, currentPnl: 12.0, beta: 0.05, ivRank: 42.0, strategyType: 'Long Strangle Hedge' },
-                { symbol: 'CASH', assetClass: 'Margin / Risk Reserve', weightPct: 10.0, allocatedAmount: 10000.0, currentPnl: 0.0, beta: 0.00, ivRank: 0.0, strategyType: 'Dry Powder Buffer' },
-              ]).map((alloc) => (
-                <div key={alloc.symbol} className="p-2.5 bg-surface-container-low border border-outline-variant/20 rounded-sm">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-on-surface px-1.5 py-0.5 bg-surface rounded text-[11px] border border-outline-variant/30">
-                        {alloc.symbol}
-                      </span>
-                      <span className="text-on-surface-variant text-[11px]">{alloc.assetClass}</span>
-                      <span className="text-[10px] text-outline font-sans">({alloc.strategyType})</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-right">
-                      <span className="font-bold text-primary">{alloc.weightPct}%</span>
-                      <span className="text-on-surface">${alloc.allocatedAmount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  {/* Progress Bar */}
-                  <div className="w-full bg-surface h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${
-                        alloc.symbol === 'SPY'
-                          ? 'bg-primary'
-                          : alloc.symbol === 'QQQ'
-                          ? 'bg-cyan-400'
-                          : alloc.symbol === 'IWM'
-                          ? 'bg-amber-400'
-                          : alloc.symbol === 'GLD'
-                          ? 'bg-yellow-300'
-                          : 'bg-outline'
-                      }`}
-                      style={{ width: `${alloc.weightPct}%` }}
-                    />
-                  </div>
+              {(basePortfolio?.diversification?.allocations || []).length === 0 ? (
+                <div className="text-outline text-xs p-4 text-center">
+                  No active option positions. Portfolio is 100% Cash buffer.
                 </div>
-              ))}
+              ) : (
+                (basePortfolio?.diversification?.allocations || []).map((alloc) => (
+                  <div key={alloc.symbol} className="p-2.5 bg-surface-container-low border border-outline-variant/20 rounded-sm">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-on-surface px-1.5 py-0.5 bg-surface rounded text-[11px] border border-outline-variant/30">
+                          {alloc.symbol}
+                        </span>
+                        <span className="text-on-surface-variant text-[11px]">{alloc.assetClass}</span>
+                        <span className="text-[10px] text-outline font-sans">({alloc.strategyType})</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-right">
+                        <span className="font-bold text-primary">{alloc.weightPct}%</span>
+                        <span className="text-on-surface">${alloc.allocatedAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-surface h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${Math.min(100, alloc.weightPct)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -1071,51 +1015,49 @@ export default function PortfolioPage() {
             </h3>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-center font-mono text-[10px] border-collapse">
-                <thead>
-                  <tr className="text-outline border-b border-outline-variant/30">
-                    <th className="p-1.5 text-left">Asset</th>
-                    <th className="p-1.5">SPY</th>
-                    <th className="p-1.5">QQQ</th>
-                    <th className="p-1.5">IWM</th>
-                    <th className="p-1.5">GLD</th>
-                    <th className="p-1.5">TLT</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/20">
-                  {[
-                    { sym: 'SPY', vals: [1.00, 0.84, 0.72, -0.08, -0.32] },
-                    { sym: 'QQQ', vals: [0.84, 1.00, 0.68, -0.12, -0.38] },
-                    { sym: 'IWM', vals: [0.72, 0.68, 1.00, 0.02, -0.24] },
-                    { sym: 'GLD', vals: [-0.08, -0.12, 0.02, 1.00, 0.28] },
-                    { sym: 'TLT', vals: [-0.32, -0.38, -0.24, 0.28, 1.00] },
-                  ].map((row) => (
-                    <tr key={row.sym} className="hover:bg-surface-container-high/60">
-                      <td className="p-1.5 text-left font-bold text-on-surface">{row.sym}</td>
-                      {row.vals.map((v, i) => (
-                        <td
-                          key={i}
-                          className={`p-1.5 font-bold ${
-                            v === 1.0
-                              ? 'text-outline bg-surface-container-high/30'
-                              : v < 0
-                              ? 'text-cyan-300 bg-cyan-950/30'
-                              : v > 0.75
-                              ? 'text-amber-400 bg-amber-950/30'
-                              : 'text-on-surface'
-                          }`}
-                        >
-                          {v >= 0 ? `+${v.toFixed(2)}` : v.toFixed(2)}
-                        </td>
+              {Object.keys(basePortfolio?.diversification?.correlationMatrix || {}).length === 0 ? (
+                <div className="text-outline text-xs p-4 text-center">
+                  Correlation matrix requires active assets.
+                </div>
+              ) : (
+                <table className="w-full text-center font-mono text-[10px] border-collapse">
+                  <thead>
+                    <tr className="text-outline border-b border-outline-variant/30">
+                      <th className="p-1.5 text-left">Asset</th>
+                      {Object.keys(basePortfolio?.diversification?.correlationMatrix || {}).map((k) => (
+                        <th key={k} className="p-1.5">{k}</th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/20">
+                    {Object.entries(basePortfolio?.diversification?.correlationMatrix || {}).map(([sym, row]) => (
+                      <tr key={sym} className="hover:bg-surface-container-high/60">
+                        <td className="p-1.5 text-left font-bold text-on-surface">{sym}</td>
+                        {Object.entries(row).map(([k, v]) => (
+                          <td
+                            key={k}
+                            className={`p-1.5 font-bold ${
+                              v === 1.0
+                                ? 'text-outline bg-surface-container-high/30'
+                                : v < 0
+                                ? 'text-cyan-300 bg-cyan-950/30'
+                                : v > 0.75
+                                ? 'text-amber-400 bg-amber-950/30'
+                                : 'text-on-surface'
+                            }`}
+                          >
+                            {v >= 0 ? `+${v.toFixed(2)}` : v.toFixed(2)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             <p className="font-mono text-[10px] text-outline mt-1 leading-relaxed">
-              💡 Negative correlations with GLD (-0.08) and TLT (-0.32) provide mathematical tail-risk hedging against sudden market crashes.
+              💡 {basePortfolio?.diversification?.rebalanceRecommendation || 'Real-time asset weights and cross-asset correlation matrix.'}
             </p>
           </div>
         </div>

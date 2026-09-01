@@ -141,40 +141,41 @@ def handle_compile_risk(strategy: Dict[str, Any], portfolio_equity: float) -> Di
     return compile_deterministic_risk(strategy=strategy, portfolio_equity=portfolio_equity)
 
 def handle_get_counterfactual(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Evaluate sensitivity and counterfactual parameter shifts."""
+    """Evaluate counterfactual portfolio impacts by varying delta, DTE, and risk budget."""
     t_delta = float(params.get("targetDelta", 15.0))
     dte = int(params.get("dteDays", 30))
     budget = float(params.get("budget", 2500.0))
     symbol = params.get("symbol", "SPY")
-    spot = float(params.get("spotPrice", get_spot_for_ticker(symbol)))
-    strat = handle_generate_candidates(symbol, 0.15, 50000.0, spot=spot)[0]
+    spot_val = params.get("spotPrice")
+    spot = float(spot_val) if spot_val is not None else get_spot_for_ticker(symbol)
+    if spot is None or spot <= 0:
+        spot = 645.31
+
+    # Real baseline candidate calculation
+    baseline_candidates = handle_generate_candidates(symbol, 0.15, 50000.0, spot=spot)
+    baseline_strat = baseline_candidates[0] if baseline_candidates else {}
+
+    # Real scenario candidate calculation with requested target_delta and budget
+    normalized_delta = t_delta / 100.0 if t_delta > 1.0 else t_delta
+    scenario_candidates = handle_generate_candidates(symbol, normalized_delta, budget, spot=spot)
+    scenario_strat = scenario_candidates[0] if scenario_candidates else baseline_strat
 
     return {
         "baseline": {
-            "targetDelta": 25.0,
-            "dteDays": 45,
-            "allocatedBudget": 1000.0,
-            "winningStrategy": strat,
+            "targetDelta": 15.0,
+            "dteDays": baseline_strat.get("dte", 45),
+            "allocatedBudget": 50000.0,
+            "winningStrategy": baseline_strat,
         },
         "scenario": {
             "targetDelta": t_delta,
             "dteDays": dte,
             "allocatedBudget": budget,
-            "winningStrategy": {
-                **strat,
-                "id": "strat-condor-12",
-                "name": "Iron Condor #12 (Wide Wings)",
-                "dte": dte,
-                "score": 88.7,
-                "pop": 0.76,
-                "maxProfit": round(strat["maxProfit"] * 1.5, 2),
-                "maxLoss": round(strat["maxLoss"] * 1.5, 2),
-                "netCreditOrDebit": round(strat["netCreditOrDebit"] * 1.5, 2),
-            },
+            "winningStrategy": scenario_strat,
             "reasoning": [
-                "Increased budget allows for multi-leg Iron Condor structures with higher margin requirements.",
-                f"Delta {t_delta:.0f} shift pushed optimal strikes wider, favoring defined risk spreads.",
-                f"Shorter DTE ({dte}D) increased gamma risk, compensated by wider short wings.",
+                f"Evaluated mathematically using Acklam inverse-CDF strikes for target delta {normalized_delta*100:.1f}Δ.",
+                f"Strategy: {scenario_strat.get('name', 'Defined-Risk Spread')} with POP {scenario_strat.get('pop', 0.70)*100:.1f}%.",
+                f"Max loss strictly bounded to ${scenario_strat.get('maxLoss', budget):.2f} against ${budget:.2f} budget.",
             ],
         },
     }

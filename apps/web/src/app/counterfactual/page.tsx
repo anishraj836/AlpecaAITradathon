@@ -3,10 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { CounterfactualComparison } from '@/types/voltron';
-import { DEMO_COUNTERFACTUAL } from '@/fixtures/voltronFixtures';
 
 export default function CounterfactualLabPage() {
-  const [data, setData] = useState<CounterfactualComparison>(DEMO_COUNTERFACTUAL);
+  const [data, setData] = useState<CounterfactualComparison | null>(null);
   const [targetDelta, setTargetDelta] = useState<number>(15);
   const [dteDays, setDteDays] = useState<number>(30);
   const [budget, setBudget] = useState<number>(2500);
@@ -31,6 +30,16 @@ export default function CounterfactualLabPage() {
       setTimeout(() => setIsRunning(false), 500);
     }
   };
+
+  if (!data || !data.baseline || !data.scenario) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-3">
+        <span className="material-symbols-outlined text-[42px] text-primary animate-spin">refresh</span>
+        <p className="font-mono text-sm text-on-surface font-bold">Computing Quantitative Counterfactual Sensitivity...</p>
+        <p className="font-mono text-xs text-outline">Solving closed-form Black-Scholes and Acklam inverse-CDF strikes</p>
+      </div>
+    );
+  }
 
   const { baseline, scenario } = data;
 

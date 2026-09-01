@@ -4,16 +4,15 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { StrategyCandidate } from '@/types/voltron';
-import { DEMO_STRATEGY_CANDIDATES } from '@/fixtures/voltronFixtures';
 
 const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
 
 export default function OpportunityScannerPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
   const [customTickerInput, setCustomTickerInput] = useState<string>('');
-  const [strategies, setStrategies] = useState<StrategyCandidate[]>(DEMO_STRATEGY_CANDIDATES);
+  const [strategies, setStrategies] = useState<StrategyCandidate[]>([]);
   const [sortBy, setSortBy] = useState<'score' | 'pop'>('score');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const loadTournament = async (symbol: string) => {
     setIsLoading(true);

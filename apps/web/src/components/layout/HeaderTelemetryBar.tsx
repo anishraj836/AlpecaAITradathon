@@ -4,12 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { api } from '@/lib/api';
 import { TelemetryStatus, SystemSettings, AutonomyLevel } from '@/types/voltron';
-import { DEMO_TELEMETRY } from '@/fixtures/voltronFixtures';
 import { SettingsModal } from '@/components/common/SettingsModal';
 import { Settings, Cpu, ShieldCheck, Zap } from 'lucide-react';
 
 export const HeaderTelemetryBar: React.FC = () => {
-  const [telemetry, setTelemetry] = useState<TelemetryStatus>(DEMO_TELEMETRY);
+  const [telemetry, setTelemetry] = useState<TelemetryStatus | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
@@ -93,48 +92,55 @@ export const HeaderTelemetryBar: React.FC = () => {
     <>
       <header className="fixed top-0 left-64 right-0 h-16 bg-surface-container/90 backdrop-blur-md border-b border-outline-variant/30 z-40 px-6 flex items-center justify-between shadow-sm select-none">
         {/* Left Market Metrics */}
-        <div className="flex items-center gap-8">
-          {/* Underlying Quote */}
-          <div className="flex flex-col">
-            <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
-              Market Status ({telemetry.marketStatus})
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="font-data-md text-data-md text-on-surface font-bold">
-                {telemetry.underlying}
+        {!telemetry ? (
+          <div className="flex items-center gap-3 text-xs font-mono text-outline">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+            <span className="tracking-wide">Connecting to Alpaca Live Market Stream...</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-8">
+            {/* Underlying Quote */}
+            <div className="flex flex-col">
+              <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
+                Market Status ({telemetry.marketStatus})
               </span>
-              <span className="font-data-md text-data-md text-primary-fixed-dim font-mono">
-                ${telemetry.underlyingPrice.toFixed(2)}
+              <div className="flex items-center gap-2">
+                <span className="font-data-md text-data-md text-on-surface font-bold">
+                  {telemetry.underlying}
+                </span>
+                <span className="font-data-md text-data-md text-primary-fixed-dim font-mono">
+                  ${telemetry.underlyingPrice.toFixed(2)}
+                </span>
+                <span className="font-data-sm text-data-sm text-tertiary-container font-mono">
+                  {telemetry.underlyingChangePct >= 0 ? '+' : ''}
+                  {telemetry.underlyingChangePct.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-outline-variant/30" />
+
+            {/* Account Equity */}
+            <div className="flex flex-col">
+              <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
+                Account Equity
               </span>
-              <span className="font-data-sm text-data-sm text-tertiary-container font-mono">
-                {telemetry.underlyingChangePct >= 0 ? '+' : ''}
-                {telemetry.underlyingChangePct.toFixed(2)}%
+              <span className="font-data-md text-data-md text-primary-fixed font-mono font-bold">
+                ${telemetry.accountEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Buying Power */}
+            <div className="flex flex-col">
+              <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
+                Buying Power
+              </span>
+              <span className="font-data-md text-data-md text-on-surface font-mono">
+                ${telemetry.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>
-
-          <div className="h-8 w-px bg-outline-variant/30" />
-
-          {/* Account Equity */}
-          <div className="flex flex-col">
-            <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
-              Account Equity
-            </span>
-            <span className="font-data-md text-data-md text-primary-fixed font-mono font-bold">
-              ${telemetry.accountEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          {/* Buying Power */}
-          <div className="flex flex-col">
-            <span className="font-label-xs text-label-xs text-outline uppercase tracking-tighter">
-              Buying Power
-            </span>
-            <span className="font-data-md text-data-md text-on-surface font-mono">
-              ${telemetry.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Right Connection Status, Autonomy Mode & Settings */}
         <div className="flex items-center gap-4">
@@ -168,10 +174,12 @@ export const HeaderTelemetryBar: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high rounded-sm border border-outline-variant/30">
             <div className="w-2 h-2 rounded-full bg-primary-fixed-dim animate-pulse" />
             <span className="font-label-xs text-label-xs text-on-surface-variant font-mono tracking-wider">
-              {telemetry.alpacaConnected
+              {telemetry?.alpacaConnected
                 ? telemetry.isPaper
                   ? 'ALPACA PAPER'
                   : 'ALPACA LIVE'
+                : telemetry === null
+                ? 'CONNECTING...'
                 : 'ALPACA DISCONNECTED'}
             </span>
           </div>

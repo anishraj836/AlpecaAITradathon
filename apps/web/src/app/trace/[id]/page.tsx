@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { AgentTraceStep } from '@/types/voltron';
-import { DEMO_AGENT_TRACE } from '@/fixtures/voltronFixtures';
 
 export default function AgentTracePage() {
   const params = useParams();
-  const decisionId = typeof params?.id === 'string' ? params.id : 'DEC-SPY-9942';
+  const decisionId = typeof params?.id === 'string' ? params.id : '';
 
-  const [traceSteps, setTraceSteps] = useState<AgentTraceStep[]>(DEMO_AGENT_TRACE);
+  const [traceSteps, setTraceSteps] = useState<AgentTraceStep[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     'step-1': true,
     'step-4': true,
@@ -20,9 +20,17 @@ export default function AgentTracePage() {
 
   useEffect(() => {
     let isMounted = true;
-    api.getAgentTrace(decisionId).then((steps) => {
-      if (isMounted) setTraceSteps(steps);
-    });
+    if (decisionId) {
+      setIsLoading(true);
+      api.getAgentTrace(decisionId).then((steps) => {
+        if (isMounted) {
+          setTraceSteps(steps);
+          setIsLoading(false);
+        }
+      }).catch(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    }
     return () => {
       isMounted = false;
     };

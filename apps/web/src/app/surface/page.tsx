@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { VolatilitySurface, AnomalyReport } from '@/types/voltron';
-import { DEMO_VOL_SURFACE } from '@/fixtures/voltronFixtures';
 import { VolSurface3DCanvas } from '@/components/surface/VolSurface3DCanvas';
 
 const QUICK_SYMBOLS = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'PLTR', 'COIN'];
@@ -14,9 +13,9 @@ type SurfaceViewMode = '3D' | 'HEATMAP' | 'SMILE';
 export default function VolatilitySurfacePage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY');
   const [customTickerInput, setCustomTickerInput] = useState<string>('');
-  const [surfaceData, setSurfaceData] = useState<VolatilitySurface>(DEMO_VOL_SURFACE);
+  const [surfaceData, setSurfaceData] = useState<VolatilitySurface | null>(null);
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedAnomaly, setSelectedAnomaly] = useState<AnomalyReport | null>(null);
   const [scanNotification, setScanNotification] = useState<{
@@ -94,6 +93,16 @@ export default function VolatilitySurfacePage() {
       setIsScanning(false);
     }
   };
+
+  if (!surfaceData) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-3">
+        <span className="material-symbols-outlined text-[42px] text-primary animate-spin">refresh</span>
+        <p className="font-mono text-sm text-on-surface font-bold">Computing Live 3D Volatility Surface for {selectedSymbol}...</p>
+        <p className="font-mono text-xs text-outline">Streaming live Alpaca options contracts & Black-Scholes Greeks</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col w-full h-full gap-container-gap pb-container-gap">

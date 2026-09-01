@@ -44,8 +44,24 @@ async def get_strategies(
     target_delta: float = 0.15,
     budget: float = 50000.0,
     quant_gw = Depends(get_quant_gateway),
+    broker_gw = Depends(get_broker_gateway),
 ):
-    return await quant_gw.generate_candidates(symbol, target_delta, budget)
+    symbol = symbol.strip().upper()
+    try:
+        ctx = await broker_gw.get_market_context(symbol)
+        spot = ctx.price
+    except Exception:
+        spot = None
+
+    try:
+        chain = await broker_gw.get_option_chain(symbol)
+        raw_contracts = [leg.model_dump() for leg in chain] if chain else None
+    except Exception:
+        raw_contracts = None
+
+    return await quant_gw.generate_candidates(
+        symbol, target_delta, budget, spot=spot, chain=raw_contracts
+    )
 
 @router.get("/surface", response_model=VolatilitySurface)
 async def get_volatility_surface(
@@ -105,16 +121,33 @@ async def get_market_anomalies(
 @router.get("/stress", response_model=StressReport)
 async def get_stress_report(
     strategy_id: str = "strat-condor-01",
+    symbol: str = "SPY",
     quant_gw = Depends(get_quant_gateway),
+    broker_gw = Depends(get_broker_gateway),
 ):
-    return await quant_gw.stress_test(strategy_id)
+    symbol = symbol.strip().upper()
+    try:
+        ctx = await broker_gw.get_market_context(symbol)
+        spot = ctx.price
+    except Exception:
+        spot = None
+
+    return await quant_gw.stress_test(strategy_id, spot=spot)
 
 @router.post("/counterfactual", response_model=CounterfactualComparison)
 async def get_counterfactual(
     params: Optional[dict] = None,
     quant_gw = Depends(get_quant_gateway),
+    broker_gw = Depends(get_broker_gateway),
 ):
-    return await quant_gw.get_counterfactual(params or {})
+    p = dict(params) if params else {}
+    symbol = p.get("symbol", "SPY").strip().upper()
+    try:
+        ctx = await broker_gw.get_market_context(symbol)
+        p["spotPrice"] = ctx.price
+    except Exception:
+        pass
+    return await quant_gw.get_counterfactual(p)
 
 @router.get("/agents/trace/{decision_id}", response_model=List[AgentTraceStep])
 async def get_agent_trace(

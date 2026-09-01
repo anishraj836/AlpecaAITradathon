@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { DecisionPacket, OrderResult } from '@/types/voltron';
-import { DEMO_DECISION_PACKET } from '@/fixtures/voltronFixtures';
 
 export default function DecisionRoomPage() {
   const params = useParams();
-  const decisionId = typeof params?.id === 'string' ? params.id : 'DEC-SPY-9942';
+  const decisionId = typeof params?.id === 'string' ? params.id : '';
 
-  const [decision, setDecision] = useState<DecisionPacket>(DEMO_DECISION_PACKET);
+  const [decision, setDecision] = useState<DecisionPacket | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -20,21 +20,28 @@ export default function DecisionRoomPage() {
 
   useEffect(() => {
     let isMounted = true;
-    api.getDecision(decisionId).then(async (data) => {
-      if (isMounted) {
-        setDecision(data);
-        if (data.status === 'APPROVED') {
-          try {
-            const ord = await api.getOrder(decisionId);
-            if (isMounted) setOrderResult(ord);
-          } catch (e) {
-            console.warn('Could not load order details:', e);
+    if (decisionId) {
+      setIsLoading(true);
+      api.getDecision(decisionId).then(async (data) => {
+        if (isMounted) {
+          setDecision(data);
+          setIsLoading(false);
+          if (data.status === 'APPROVED' || data.status === 'EXECUTED') {
+            try {
+              const ord = await api.getOrder(decisionId);
+              if (isMounted) setOrderResult(ord);
+            } catch (e) {
+              console.warn('Could not load order details:', e);
+            }
           }
         }
-      }
-    }).catch((err) => {
-      console.warn('Using local fallback decision:', err);
-    });
+      }).catch((err) => {
+        if (isMounted) {
+          setIsLoading(false);
+          setErrorMessage(`Decision '${decisionId}' was not found in database.`);
+        }
+      });
+    }
     return () => {
       isMounted = false;
     };
@@ -42,14 +49,14 @@ export default function DecisionRoomPage() {
 
   const handleConfirmApproval = async () => {
     setShowConfirmModal(false);
-    if (isProcessing || decision.status === 'APPROVED' || decision.status === 'EXECUTED') return;
+    if (isProcessing || !decision || decision.status === 'APPROVED' || decision.status === 'EXECUTED') return;
     setIsProcessing(true);
     setErrorMessage(null);
 
     try {
       const result = await api.approveDecision(decision.id);
       setOrderResult(result);
-      setDecision((prev) => ({ ...prev, status: 'APPROVED' }));
+      setDecision((prev) => (prev ? { ...prev, status: 'APPROVED' } : prev));
     } catch (err: any) {
       console.error('Approval failed:', err);
       setErrorMessage(err?.message || 'Failed to approve and route order.');
@@ -59,13 +66,13 @@ export default function DecisionRoomPage() {
   };
 
   const handleRejectOrder = async () => {
-    if (isProcessing) return;
+    if (isProcessing || !decision) return;
     setIsProcessing(true);
     setErrorMessage(null);
 
     try {
       await api.rejectDecision(decision.id);
-      setDecision((prev) => ({ ...prev, status: 'REJECTED' }));
+      setDecision((prev) => (prev ? { ...prev, status: 'REJECTED' } : prev));
     } catch (err: any) {
       console.error('Rejection failed:', err);
       setErrorMessage(err?.message || 'Failed to reject decision.');
@@ -73,6 +80,27 @@ export default function DecisionRoomPage() {
       setIsProcessing(false);
     }
   };
+
+  if (!decision) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-3">
+        {isLoading ? (
+          <>
+            <span className="material-symbols-outlined text-[42px] text-primary animate-spin">refresh</span>
+            <p className="font-mono text-sm text-on-surface font-bold">Loading Decision Packet from Database...</p>
+          </>
+        ) : (
+          <div className="bg-surface-container p-6 border border-error/40 rounded-sm text-center max-w-md">
+            <span className="material-symbols-outlined text-error text-[36px] mb-2">error</span>
+            <p className="font-mono text-sm text-on-surface font-bold">{errorMessage || `Decision '${decisionId}' was not found in database.`}</p>
+            <Link href="/terminal" className="mt-4 inline-block px-4 py-1.5 bg-primary text-on-primary font-mono text-xs rounded-sm font-bold">
+              Return to Terminal
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const strategy = decision.strategy;
 
