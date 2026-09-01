@@ -61,12 +61,11 @@ export default function AgentsDashboardPage() {
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [levelFilter, setLevelFilter] = useState<string>('ALL');
   const [searchLogQuery, setSearchLogQuery] = useState<string>('');
-  const [autoScroll, setAutoScroll] = useState(true);
   const [newTickerInput, setNewTickerInput] = useState('');
   const [manualScanSymbol, setManualScanSymbol] = useState('PLTR');
   const [notification, setNotification] = useState<string | null>(null);
 
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const consoleBoxRef = useRef<HTMLDivElement>(null);
 
   // Load telemetry
   const fetchTelemetry = async () => {
@@ -88,13 +87,6 @@ export default function AgentsDashboardPage() {
     const interval = setInterval(fetchTelemetry, 2000);
     return () => clearInterval(interval);
   }, []);
-
-  // Auto-scroll logs to bottom if enabled
-  useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs, autoScroll]);
 
   // Handle Control Actions
   const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST', payload?: any) => {
@@ -522,20 +514,24 @@ export default function AgentsDashboardPage() {
 
             <button
               type="button"
-              onClick={() => setAutoScroll(!autoScroll)}
-              className={`px-2 py-0.5 rounded-sm text-[10px] font-bold border transition-colors ${
-                autoScroll
-                  ? 'bg-primary/20 border-primary text-primary'
-                  : 'bg-surface border-outline-variant/40 text-outline'
-              }`}
+              onClick={() => {
+                if (consoleBoxRef.current) {
+                  consoleBoxRef.current.scrollTop = consoleBoxRef.current.scrollHeight;
+                }
+              }}
+              className="px-2 py-0.5 rounded-sm text-[10px] font-bold border border-outline-variant/40 bg-surface text-outline hover:text-primary hover:border-primary/40 transition-colors flex items-center gap-1 cursor-pointer"
             >
-              {autoScroll ? 'AUTO-SCROLL ON' : 'AUTO-SCROLL OFF'}
+              <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+              <span>SCROLL TO BOTTOM</span>
             </button>
           </div>
         </div>
 
         {/* Monospace Scrolling Console Window */}
-        <div className="flex-1 p-4 bg-[#0a0f18] text-[#c9d1d9] overflow-y-auto space-y-2 text-xs select-text">
+        <div
+          ref={consoleBoxRef}
+          className="flex-1 p-4 bg-[#0a0f18] text-[#c9d1d9] overflow-y-auto space-y-2 text-xs select-text"
+        >
           {filteredLogs.length === 0 ? (
             <div className="text-outline text-center py-12">No logs matching filter criteria.</div>
           ) : (
@@ -565,7 +561,6 @@ export default function AgentsDashboardPage() {
               );
             })
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
     </div>
