@@ -35,7 +35,7 @@ class AutonomousAgentService:
     def __init__(self):
         self._is_running = True
         self._is_paused = False
-        self._autonomy_level: AutonomyLevel = "GUARDED_AUTONOMOUS"
+        self._autonomy_level: AutonomyLevel = "AUTOPILOT"
         self._market_status: str = "OPEN"
         self._watchlist: List[str] = ["SPY", "PLTR", "NVDA", "TSLA", "AAPL", "QQQ"]
         self._watchlist_index = 0
