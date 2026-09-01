@@ -489,6 +489,7 @@ class AutonomousDaemonState(BaseModel):
     cycleIntervalSeconds: int
     totalCyclesCompleted: int
     totalOrdersExecuted: int
+    totalOrdersRejected: int = 0
     totalDislocationsFound: int
     lastScanAt: Optional[str] = None
     nextScanAt: Optional[str] = None

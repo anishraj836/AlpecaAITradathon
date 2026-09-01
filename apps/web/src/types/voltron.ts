@@ -438,6 +438,7 @@ export interface AutonomousDaemonState {
   cycleIntervalSeconds: number;
   totalCyclesCompleted: number;
   totalOrdersExecuted: number;
+  totalOrdersRejected: number;
   totalDislocationsFound: number;
   lastScanAt?: string;
   nextScanAt?: string;

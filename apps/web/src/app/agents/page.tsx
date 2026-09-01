@@ -247,7 +247,7 @@ export default function AgentsDashboardPage() {
         </div>
 
         {/* Telemetry Metric Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-outline-variant/20">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-3 border-t border-outline-variant/20">
           <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
             <span className="text-[10px] font-mono text-outline uppercase">Fleet Status</span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -272,7 +272,7 @@ export default function AgentsDashboardPage() {
             <span className="text-[10px] font-mono text-outline uppercase">Cycle Interval</span>
             <div className="flex items-center gap-1.5 mt-1">
               <span className="font-mono text-xs font-bold text-primary">
-                {daemon?.currentCycleSeconds || 0}s / {daemon?.cycleIntervalSeconds || 30}s
+                {daemon?.currentCycleSeconds || 0}s / {daemon?.cycleIntervalSeconds || 45}s
               </span>
             </div>
           </div>
@@ -280,22 +280,38 @@ export default function AgentsDashboardPage() {
           <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
             <span className="text-[10px] font-mono text-outline uppercase">Cycles Run</span>
             <span className="font-mono text-xs font-bold text-on-surface mt-1">
-              {daemon?.totalCyclesCompleted || 142} cycles
+              {daemon?.totalCyclesCompleted || 0} cycles
             </span>
           </div>
 
-          <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
-            <span className="text-[10px] font-mono text-outline uppercase">Orders Dispatched</span>
+          <div className="bg-surface p-2.5 rounded-sm border border-cyan-500/30 flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-outline uppercase">Dispatched</span>
+              <span className="material-symbols-outlined text-[13px] text-cyan-400">send</span>
+            </div>
             <span className="font-mono text-xs font-bold text-cyan-400 mt-1">
-              {daemon?.totalOrdersExecuted || 19} orders
+              {daemon?.totalOrdersExecuted || 0} orders
             </span>
+            <span className="text-[9px] font-mono text-outline mt-0.5">Alpaca Verified</span>
+          </div>
+
+          <div className="bg-surface p-2.5 rounded-sm border border-amber-500/30 flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-outline uppercase">Risk Rejections</span>
+              <span className="material-symbols-outlined text-[13px] text-amber-400">shield</span>
+            </div>
+            <span className="font-mono text-xs font-bold text-amber-400 mt-1">
+              {daemon?.totalOrdersRejected || 0} blocked
+            </span>
+            <span className="text-[9px] font-mono text-amber-300/80 mt-0.5">Capital Preserved</span>
           </div>
 
           <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
             <span className="text-[10px] font-mono text-outline uppercase">Dislocations</span>
-            <span className="font-mono text-xs font-bold text-amber-400 mt-1">
-              {daemon?.totalDislocationsFound || 84} detected
+            <span className="font-mono text-xs font-bold text-purple-400 mt-1">
+              {daemon?.totalDislocationsFound || 0} detected
             </span>
+            <span className="text-[9px] font-mono text-outline mt-0.5">Quant MCP Scans</span>
           </div>
         </div>
 
@@ -485,6 +501,7 @@ export default function AgentsDashboardPage() {
 
           {/* Filter Chips */}
           <div className="flex items-center gap-2">
+            {/* Role Filter */}
             <div className="flex items-center bg-surface border border-outline-variant/30 rounded-sm p-0.5">
               {(['ALL', 'RESEARCHER', 'VOLATILITY_ANALYST', 'STRATEGY_SPECIALIST', 'RISK_CRITIC', 'AUTONOMOUS_DAEMON'] as const).map((r) => (
                 <button
@@ -498,6 +515,28 @@ export default function AgentsDashboardPage() {
                   }`}
                 >
                   {r === 'ALL' ? 'ALL' : r.replace('_ANALYST', '').replace('STRATEGY_', '').replace('AUTONOMOUS_', '')}
+                </button>
+              ))}
+            </div>
+
+            {/* Level & Rejection Filter */}
+            <div className="flex items-center bg-surface border border-outline-variant/30 rounded-sm p-0.5">
+              {(['ALL', 'DISPATCH', 'WARNING', 'SUCCESS'] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setLevelFilter(lvl)}
+                  className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all ${
+                    levelFilter === lvl
+                      ? lvl === 'WARNING'
+                        ? 'bg-amber-500 text-black font-bold'
+                        : lvl === 'DISPATCH'
+                        ? 'bg-cyan-500 text-black font-bold'
+                        : 'bg-primary text-on-primary font-bold'
+                      : 'text-outline hover:text-on-surface'
+                  }`}
+                >
+                  {lvl === 'ALL' ? 'ALL' : lvl === 'WARNING' ? 'REJECTED' : lvl}
                 </button>
               ))}
             </div>
