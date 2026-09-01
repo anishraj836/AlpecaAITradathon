@@ -413,15 +413,15 @@ class VoltronOrchestrator:
             )
 
             if can_auto_execute:
-                if is_degraded:
-                    # 🚨 SAFETY DEMOTION: Never allow un-inspected fallback heuristics to execute autonomously!
-                    logger.warning(f"[{decision_id}] SAFETY DEMOTION ACTIVATED: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
+                if is_degraded and active_autonomy == "GUARDED_AUTONOMOUS":
+                    # 🚨 SAFETY DEMOTION: In Guarded mode, hold for manual human review if LLM was rate-limited
+                    logger.warning(f"[{decision_id}] GUARDED SAFETY DEMOTION: AI reasoning was degraded. Autonomous execution locked. Demoted to Copilot Mode.")
                     await self._emit_event(
                         decision_id=decision_id,
                         event_type="safety_demotion_activated",
                         stage="EXECUTION",
                         status="COMPLETE",
-                        message=f"⚠️ Safety Demotion: AI Committee was offline. Autonomous execution locked. Manual human review required.",
+                        message=f"⚠️ Safety Demotion: AI Committee was offline/rate-limited. Autonomous execution locked. Manual human review required.",
                         payload=packet.model_dump(),
                     )
                 elif not is_market_open and active_autonomy == "GUARDED_AUTONOMOUS":

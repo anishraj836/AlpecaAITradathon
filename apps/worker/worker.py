@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from app.domain.models import DecisionPacket
 from app.infrastructure.alpaca.mcp_client import AlpacaBrokerGateway
-from app.infrastructure.options.mock_gateway import MockOptionsIntelligenceGateway
+from app.api.deps import get_quant_gateway
 from app.infrastructure.database.session import async_session_factory, init_db
 from app.agents.orchestrator import VoltronOrchestrator
 
@@ -18,7 +18,7 @@ class VoltronAnalysisWorker:
 
     def __init__(self):
         self.broker = AlpacaBrokerGateway()
-        self.quant = MockOptionsIntelligenceGateway()
+        self.quant = get_quant_gateway()
         self.is_running = False
 
     async def process_mandate(
