@@ -21,6 +21,11 @@ class OrderRepository:
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
+    async def get_by_decision(self, decision_id: str) -> List[OrderModel]:
+        stmt = select(OrderModel).where(OrderModel.decision_id == decision_id)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
     async def save_fill(self, fill: FillModel) -> FillModel:
         self.session.add(fill)
         return fill

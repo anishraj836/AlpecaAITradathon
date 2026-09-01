@@ -25,10 +25,12 @@ from app.infrastructure.database.repositories.decisions import DecisionRepositor
 from app.infrastructure.database.repositories.agents import AgentRepository
 from app.infrastructure.database.repositories.risk import RiskRepository
 from app.infrastructure.database.repositories.strategies import StrategyRepository
+from app.infrastructure.database.repositories.orders import OrderRepository
 from app.infrastructure.database.models import (
     AgentRunModel,
     RiskCheckModel,
     StrategyCandidateModel,
+    OrderModel,
 )
 from app.agents.researcher import MarketResearcherAgent
 from app.agents.volatility import VolatilityAnalystAgent
