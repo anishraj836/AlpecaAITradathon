@@ -111,3 +111,11 @@ async def rebalance_portfolio(broker_gw: BrokerGateway = Depends(get_broker_gate
 async def close_all_positions(broker_gw: BrokerGateway = Depends(get_broker_gateway)):
     await broker_gw.close_all_positions()
     return await get_portfolio_summary(broker_gw)
+
+@router.get("/history")
+async def get_portfolio_history(
+    period: str = "1M",
+    timeframe: str = "1D",
+    broker_gw: BrokerGateway = Depends(get_broker_gateway),
+) -> Dict[str, Any]:
+    return await broker_gw.get_portfolio_history(period=period, timeframe=timeframe)

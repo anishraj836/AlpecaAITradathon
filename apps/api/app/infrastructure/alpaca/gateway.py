@@ -74,3 +74,14 @@ class BrokerGateway(ABC):
     async def close_all_positions(self) -> dict:
         """Liquidate all open positions in paper trading account."""
         return {"status": "success", "closed": 0}
+
+    async def get_portfolio_history(self, period: str = "1M", timeframe: str = "1D") -> dict:
+        """Retrieve portfolio equity curve over time."""
+        return {
+            "timestamp": [],
+            "equity": [],
+            "profit_loss": [],
+            "profit_loss_pct": [],
+            "base_value": 100000.0,
+            "timeframe": timeframe,
+        }

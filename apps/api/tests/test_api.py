@@ -95,3 +95,14 @@ async def test_settings_endpoints_and_autonomy_modes():
         # 4. Test connection endpoint with dummy test
         test_resp = await client.post("/api/settings/test", json={"provider": "ollama", "model": "llama3.2:3b"})
         assert test_resp.status_code == 200
+
+@pytest.mark.asyncio
+async def test_portfolio_history_endpoint():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/portfolio/history?period=1M&timeframe=1D")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "timestamp" in data
+        assert "equity" in data
+        assert "base_value" in data
+        assert len(data["equity"]) > 0

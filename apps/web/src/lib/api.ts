@@ -16,11 +16,13 @@ import {
   OrderResult,
   MandatePipelineStep,
   PortfolioSummary,
+  PortfolioHistory,
 } from '@/types/voltron';
 
 export interface ApiClient {
   getTelemetry(): Promise<TelemetryStatus>;
   getPortfolio(): Promise<PortfolioSummary>;
+  getPortfolioHistory(period?: string, timeframe?: string): Promise<PortfolioHistory>;
   rebalancePortfolio(): Promise<PortfolioSummary>;
   closeAllPositions(): Promise<PortfolioSummary>;
   getDecision(id: string): Promise<DecisionPacket>;
@@ -83,6 +85,10 @@ class HttpSseApiAdapter implements ApiClient {
 
   async closeAllPositions(): Promise<PortfolioSummary> {
     return this.fetchJson<PortfolioSummary>('/portfolio/close-all', { method: 'POST' });
+  }
+
+  async getPortfolioHistory(period: string = '1M', timeframe: string = '1D'): Promise<PortfolioHistory> {
+    return this.fetchJson<PortfolioHistory>(`/portfolio/history?period=${period}&timeframe=${timeframe}`);
   }
 
   async getDecision(id: string): Promise<DecisionPacket> {

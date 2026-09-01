@@ -116,3 +116,6 @@ class AlpacaBrokerGateway(BrokerGateway):
 
     async def close_all_positions(self) -> dict:
         return await self.account_service.close_all_positions()
+
+    async def get_portfolio_history(self, period: str = "1M", timeframe: str = "1D") -> dict:
+        return await self.account_service.get_portfolio_history(period=period, timeframe=timeframe)

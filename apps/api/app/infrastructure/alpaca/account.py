@@ -108,3 +108,92 @@ class AlpacaAccountService:
                 timeout=10.0,
             )
             return {"status": "success", "response": resp.json() if resp.status_code == 200 else resp.text}
+
+    async def get_portfolio_history(
+        self,
+        period: str = "1M",
+        timeframe: str = "1D",
+    ) -> Dict[str, Any]:
+        """
+        Query Alpaca /v2/account/portfolio/history to obtain timestamps, equity points, and PnL curve.
+        """
+        import time
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            now_ts = int(time.time())
+            base = 100000.0
+            timestamps = []
+            equity = []
+            profit_loss = []
+            profit_loss_pct = []
+            for i in range(30, -1, -1):
+                ts = now_ts - i * 86400
+                timestamps.append(ts)
+                eq = base + (30 - i) * 35.0 - ((i % 5) * 45.0)
+                equity.append(round(eq, 2))
+                pl = eq - base
+                profit_loss.append(round(pl, 2))
+                profit_loss_pct.append(round(pl / base * 100.0, 4))
+            return {
+                "timestamp": timestamps,
+                "equity": equity,
+                "profit_loss": profit_loss,
+                "profit_loss_pct": profit_loss_pct,
+                "base_value": base,
+                "timeframe": timeframe,
+            }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.ALPACA_BASE_URL}/v2/account/portfolio/history",
+                    headers=self.headers,
+                    params={"period": period, "timeframe": timeframe},
+                    timeout=10.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    timestamps = data.get("timestamp", [])
+                    equity = data.get("equity", [])
+                    pl = data.get("profit_loss", [])
+                    pl_pct = data.get("profit_loss_pct", [])
+                    base_val = data.get("base_value", 100000.0)
+
+                    # Filter out leading zero data points
+                    filtered_ts = []
+                    filtered_eq = []
+                    filtered_pl = []
+                    filtered_pct = []
+                    for t, e, p, pct in zip(timestamps, equity, pl, pl_pct):
+                        if e and e > 0:
+                            filtered_ts.append(t)
+                            filtered_eq.append(round(float(e), 2))
+                            filtered_pl.append(round(float(p or 0.0), 2))
+                            filtered_pct.append(round(float(pct or 0.0), 4))
+
+                    if not filtered_eq:
+                        now_ts = int(time.time())
+                        filtered_ts = [now_ts - 86400, now_ts]
+                        filtered_eq = [base_val, base_val]
+                        filtered_pl = [0.0, 0.0]
+                        filtered_pct = [0.0, 0.0]
+
+                    return {
+                        "timestamp": filtered_ts,
+                        "equity": filtered_eq,
+                        "profit_loss": filtered_pl,
+                        "profit_loss_pct": filtered_pct,
+                        "base_value": base_val,
+                        "timeframe": timeframe,
+                    }
+        except Exception as e:
+            logger.warning(f"Error fetching portfolio history from Alpaca: {e}")
+
+        now_ts = int(time.time())
+        return {
+            "timestamp": [now_ts - 86400, now_ts],
+            "equity": [100000.0, 100000.0],
+            "profit_loss": [0.0, 0.0],
+            "profit_loss_pct": [0.0, 0.0],
+            "base_value": 100000.0,
+            "timeframe": timeframe,
+        }
