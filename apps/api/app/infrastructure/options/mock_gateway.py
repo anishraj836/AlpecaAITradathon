@@ -153,7 +153,32 @@ class MockOptionsIntelligenceGateway(OptionsIntelligenceGateway):
         spot: Optional[float] = None,
         chain: Optional[List[Dict[str, Any]]] = None,
     ) -> VolatilitySurface:
-        actual_spot = spot if (spot is not None and spot > 0) else (645.31 if symbol.upper() == "SPY" else 230.0)
+        sym = symbol.upper()
+        spot_table = {
+            "SPY": 645.31,
+            "QQQ": 510.00,
+            "IWM": 224.50,
+            "NVDA": 138.50,
+            "AAPL": 228.40,
+            "TSLA": 215.10,
+            "MSFT": 425.00,
+            "AMZN": 186.00,
+            "META": 528.00,
+            "GOOGL": 168.00,
+            "AMD": 154.00,
+            "PLTR": 34.50,
+            "COIN": 212.00,
+            "SMCI": 448.00,
+            "ARM": 134.00,
+            "GLD": 230.00,
+        }
+        if spot is not None and spot > 0:
+            actual_spot = spot
+        elif sym in spot_table:
+            actual_spot = spot_table[sym]
+        else:
+            hash_val = sum(ord(c) for c in sym)
+            actual_spot = round(50.0 + (hash_val % 350) + 0.5, 2)
         try:
             from surface import build_volatility_surface
             raw_surface = build_volatility_surface(

@@ -178,15 +178,20 @@ export default function VolatilitySurfacePage() {
                         <React.Fragment key={dte}>
                           <div className="p-2 font-data-sm text-data-sm text-on-surface-variant font-mono">{dte}</div>
                           {heatmapStrikes.map((_, sIdx) => {
-                            const ivVal = (surfaceData.skewSnapshot?.atmIV || 18.2) + (sIdx === 0 ? 4.2 : sIdx === 1 ? 2.1 : sIdx === 2 ? 0.0 : sIdx === 3 ? -1.2 : -0.8) + (4 - dIdx) * 0.8;
+                            const atm = surfaceData.skewSnapshot?.atmIV || 18.2;
+                            const putDelta = (surfaceData.skewSnapshot?.put25DeltaIV || (atm * 1.25)) - atm;
+                            const callDelta = (surfaceData.skewSnapshot?.call25DeltaIV || (atm * 0.9)) - atm;
+                            const skewOffset = sIdx === 0 ? putDelta : sIdx === 1 ? putDelta * 0.5 : sIdx === 2 ? 0.0 : sIdx === 3 ? callDelta * 0.5 : callDelta;
+                            const ivVal = Math.max(5.0, atm + skewOffset + (4 - dIdx) * (atm * 0.04));
+
                             return (
                               <div
                                 key={sIdx}
-                                className={`p-2 text-center font-mono ${
+                                className={`p-2 text-center font-mono rounded-xs ${
                                   sIdx < 2
-                                    ? 'bg-error/30 text-error font-bold'
+                                    ? 'bg-error/25 text-error font-bold'
                                     : sIdx === 2
-                                    ? 'bg-primary/20 text-primary'
+                                    ? 'bg-primary/20 text-primary font-bold'
                                     : 'bg-primary/10 text-on-surface'
                                 }`}
                               >
@@ -202,41 +207,68 @@ export default function VolatilitySurfacePage() {
               </div>
             )}
 
-            {/* Mode 3: Volatility Smile View */}
-            {viewMode === 'SMILE' && (
-              <div className="w-full h-full p-8 flex flex-col items-center justify-center max-w-3xl relative">
-                <h4 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-4 self-start font-mono">
-                  {surfaceData.underlying} (${surfaceData.spotPrice.toFixed(2)}) 30D Implied Volatility Smile & Skew Curve
-                </h4>
-                <svg className="w-full h-64 border-b border-l border-outline-variant/30 p-4" viewBox="0 0 600 200">
-                  {/* Grid */}
-                  <line x1="0" y1="100" x2="600" y2="100" stroke="#192122" strokeDasharray="4 4" />
-                  <line x1="300" y1="0" x2="300" y2="200" stroke="#3b494c" strokeWidth="1" />
-                  {/* Smile Curve */}
-                  <path
-                    d="M 50,40 Q 250,160 300,150 T 550,80"
-                    fill="none"
-                    stroke="#00e5ff"
-                    strokeWidth="3"
-                  />
-                  {/* Put Skew Highlight */}
-                  <circle cx="150" cy="90" r="4" fill="#ffb4ab" />
-                  <text x="160" y="85" fill="#ffb4ab" fontSize="11" fontFamily="JetBrains Mono">
-                    25Δ Put ({surfaceData.skewSnapshot?.put25DeltaIV?.toFixed(1) || 21.4}%)
-                  </text>
-                  {/* ATM */}
-                  <circle cx="300" cy="150" r="4" fill="#00daf3" />
-                  <text x="310" y="145" fill="#00daf3" fontSize="11" fontFamily="JetBrains Mono">
-                    ATM ({surfaceData.skewSnapshot?.atmIV?.toFixed(1) || 18.2}%)
-                  </text>
-                  {/* Call Skew */}
-                  <circle cx="480" cy="100" r="4" fill="#cdbdff" />
-                  <text x="490" y="95" fill="#cdbdff" fontSize="11" fontFamily="JetBrains Mono">
-                    25Δ Call ({surfaceData.skewSnapshot?.call25DeltaIV?.toFixed(1) || 16.8}%)
-                  </text>
-                </svg>
-              </div>
-            )}
+            {/* Mode 3: Dynamic Volatility Smile View */}
+            {viewMode === 'SMILE' && (() => {
+              const putIv = surfaceData.skewSnapshot?.put25DeltaIV || 21.4;
+              const atmIv = surfaceData.skewSnapshot?.atmIV || 18.2;
+              const callIv = surfaceData.skewSnapshot?.call25DeltaIV || 16.8;
+
+              const maxIv = Math.max(putIv, atmIv, callIv, 40.0) * 1.15;
+              const minIv = Math.min(putIv, atmIv, callIv, 12.0) * 0.75;
+              const rangeIv = maxIv - minIv || 1;
+
+              const getSmileY = (iv: number) => 180 - ((iv - minIv) / rangeIv) * 140;
+
+              const putY = getSmileY(putIv);
+              const atmY = getSmileY(atmIv);
+              const callY = getSmileY(callIv);
+
+              const startY = getSmileY(putIv * 1.10);
+              const endY = getSmileY(callIv * 1.05);
+
+              const smilePath = `M 50,${startY.toFixed(1)} Q 170,${putY.toFixed(1)} 300,${atmY.toFixed(1)} T 550,${endY.toFixed(1)}`;
+
+              return (
+                <div className="w-full h-full p-8 flex flex-col items-center justify-center max-w-3xl relative">
+                  <h4 className="font-label-xs text-label-xs text-outline uppercase tracking-widest mb-4 self-start font-mono">
+                    {surfaceData.underlying} (${surfaceData.spotPrice.toFixed(2)}) 30D Implied Volatility Smile &amp; Skew Curve
+                  </h4>
+                  <svg className="w-full h-64 border-b border-l border-outline-variant/30 p-4" viewBox="0 0 600 200">
+                    {/* Grid */}
+                    <line x1="0" y1="50" x2="600" y2="50" stroke="#192122" strokeDasharray="4 4" />
+                    <line x1="0" y1="100" x2="600" y2="100" stroke="#192122" strokeDasharray="4 4" />
+                    <line x1="0" y1="150" x2="600" y2="150" stroke="#192122" strokeDasharray="4 4" />
+                    <line x1="300" y1="0" x2="300" y2="200" stroke="#3b494c" strokeWidth="1" />
+
+                    {/* Smile Curve */}
+                    <path
+                      d={smilePath}
+                      fill="none"
+                      stroke="#00e5ff"
+                      strokeWidth="3"
+                    />
+
+                    {/* Put Skew Highlight */}
+                    <circle cx="170" cy={putY} r="5" fill="#ffb4ab" />
+                    <text x="180" y={putY - 8} fill="#ffb4ab" fontSize="11" fontFamily="JetBrains Mono" fontWeight="bold">
+                      25Δ Put ({putIv.toFixed(1)}%)
+                    </text>
+
+                    {/* ATM */}
+                    <circle cx="300" cy={atmY} r="5" fill="#00daf3" />
+                    <text x="310" y={atmY + 18} fill="#00daf3" fontSize="11" fontFamily="JetBrains Mono" fontWeight="bold">
+                      ATM ({atmIv.toFixed(1)}%)
+                    </text>
+
+                    {/* Call Skew */}
+                    <circle cx="430" cy={callY} r="5" fill="#cdbdff" />
+                    <text x="440" y={callY - 8} fill="#cdbdff" fontSize="11" fontFamily="JetBrains Mono" fontWeight="bold">
+                      25Δ Call ({callIv.toFixed(1)}%)
+                    </text>
+                  </svg>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

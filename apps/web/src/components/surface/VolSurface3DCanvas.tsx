@@ -63,17 +63,30 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
     { strike: longCallStrike, type: 'CALL', action: 'BUY WING', color: '#00e5ff' },
   ];
 
+  const atmIV = surfaceData.skewSnapshot?.atmIV || 18.2;
+  const skewRatio = surfaceData.skewSnapshot?.skewRatio || 1.25;
+
+  // Dynamic relative Z height: scales proportionally to ticker's ATM volatility
+  const getZHeight = useCallback((iv: number) => {
+    const floor = Math.max(4.0, atmIV * 0.65);
+    return Math.max(0, (iv - floor) * 4.2);
+  }, [atmIV]);
+
   // Compute IV at a given strike and DTE
   const computeIV = useCallback((k: number, dte: number) => {
     const moneyness = (k - spotPrice) / Math.max(spotPrice, 1.0);
-    // Volatility smile + skew + term structure
-    const termFactor = Math.sqrt(30 / Math.max(dte, 1)) * 1.8;
-    const skewFactor = moneyness < 0 
-      ? Math.pow(moneyness * 10, 2) * 0.85 - moneyness * 16.0
-      : Math.pow(moneyness * 10, 2) * 0.45;
-    const baseIV = (surfaceData.skewSnapshot?.atmIV || 18.2) + termFactor + skewFactor;
-    return Math.max(10.0, Math.min(65.0, baseIV));
-  }, [spotPrice, surfaceData.skewSnapshot?.atmIV]);
+    // Term structure effect: shorter DTE has term expansion or compression based on ticker
+    const termFactor = (Math.sqrt(30 / Math.max(dte, 1)) - 1.0) * (atmIV * 0.12);
+
+    // Skew effect: Downside put skew is steeper than upside call skew, scaled by skewRatio
+    const skewPower = (skewRatio - 1.0) * 3.5;
+    const skewFactor = moneyness < 0
+      ? Math.pow(moneyness * 6.0, 2) * (atmIV * 0.15) - moneyness * (atmIV * skewPower)
+      : Math.pow(moneyness * 6.0, 2) * (atmIV * 0.08) - moneyness * (atmIV * 0.15);
+
+    const baseIV = atmIV + termFactor + skewFactor;
+    return Math.max(5.0, Math.min(250.0, baseIV));
+  }, [spotPrice, atmIV, skewRatio]);
 
   // Generate 3D grid vertices
   const generateMesh = useCallback(() => {
@@ -91,15 +104,13 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
         const y = ((dte - minDte) / (maxDte - minDte) - 0.5) * 300;
 
         const iv = computeIV(strike, dte);
-        // Dynamic relative Z-height scaled to ticker's ATM baseline
-        const atmBase = (surfaceData.skewSnapshot?.atmIV || 18.2) - 6.0;
-        const z = Math.max(0, (iv - atmBase) * 4.8);
+        const z = getZHeight(iv);
 
         grid[i][j] = { x, y, z, strike, dte, iv };
       }
     }
     return grid;
-  }, [computeIV, minStrike, maxStrike, minDte, maxDte, surfaceData.skewSnapshot?.atmIV]);
+  }, [computeIV, getZHeight, minStrike, maxStrike, minDte, maxDte]);
 
   // Main Render Loop
   const renderSurface = useCallback(() => {
@@ -206,15 +217,15 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
 
       // Relative normalization between 0.0 (valley) and 1.0 (peak skew)
       const relNorm = (quad.avgIv - minQuadIv) / ivRange;
-      let fillColor = 'rgba(0, 229, 255, 0.25)'; // Low / ATM valley: Cyan
-      let strokeColor = 'rgba(0, 229, 255, 0.65)';
+      let fillColor = 'rgba(0, 229, 255, 0.22)'; // Low / ATM valley: Cyan
+      let strokeColor = 'rgba(0, 229, 255, 0.60)';
 
-      if (relNorm > 0.62) {
-        fillColor = 'rgba(255, 75, 75, 0.42)'; // Peak skew spike: Crimson Red
-        strokeColor = 'rgba(255, 100, 100, 0.90)';
-      } else if (relNorm > 0.32) {
-        fillColor = 'rgba(254, 201, 49, 0.30)'; // Mid vol slope: Amber Gold
-        strokeColor = 'rgba(254, 201, 49, 0.75)';
+      if (relNorm > 0.72) {
+        fillColor = 'rgba(255, 75, 75, 0.38)'; // Peak skew spike: Crimson Red
+        strokeColor = 'rgba(255, 100, 100, 0.85)';
+      } else if (relNorm > 0.38) {
+        fillColor = 'rgba(254, 201, 49, 0.28)'; // Mid vol slope: Amber Gold
+        strokeColor = 'rgba(254, 201, 49, 0.70)';
       }
 
       ctx.fillStyle = fillColor;
@@ -236,7 +247,7 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
       for (const leg of strategyLegs) {
         const legX = ((leg.strike - minStrike) / (maxStrike - minStrike) - 0.5) * 340;
         const legIv = computeIV(leg.strike, 45); // 45 DTE target
-        const legZ = (legIv - 14.0) * 4.4;
+        const legZ = getZHeight(legIv);
         const legY = ((45 - minDte) / (maxDte - minDte) - 0.5) * 300;
 
         const surfacePoint = project({ x: legX, y: legY, z: legZ, strike: leg.strike, dte: 45, iv: legIv });
@@ -315,11 +326,11 @@ export const VolSurface3DCanvas: React.FC<VolSurface3DCanvasProps> = ({ surfaceD
     ctx.fillStyle = '#fec931';
     ctx.fillText('↑ VOLATILITY (IV %)', zEnd.screenX - 45, zEnd.screenY - 10);
 
-    // 5. Draw ATM Focal Node in True 3D Space ($645.31 spot, 14 DTE)
+    // 5. Draw ATM Focal Node in True 3D Space (${spotPrice.toFixed(2)} spot, 14 DTE)
     const atmX = ((spotPrice - minStrike) / (maxStrike - minStrike) - 0.5) * 340;
     const atmY = ((14 - minDte) / (maxDte - minDte) - 0.5) * 300;
     const atmIv = computeIV(spotPrice, 14);
-    const atmZ = (atmIv - 14.0) * 4.4;
+    const atmZ = getZHeight(atmIv);
 
     const atmProj = project({ x: atmX, y: atmY, z: atmZ, strike: spotPrice, dte: 14, iv: atmIv });
     const atmBase = project({ x: atmX, y: atmY, z: 0, strike: spotPrice, dte: 14, iv: 0 });

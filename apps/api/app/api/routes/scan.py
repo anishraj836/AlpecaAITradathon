@@ -50,8 +50,23 @@ async def get_strategies(
 async def get_volatility_surface(
     symbol: str = "SPY",
     quant_gw = Depends(get_quant_gateway),
+    broker_gw = Depends(get_broker_gateway),
 ):
-    return await quant_gw.get_surface(symbol)
+    symbol = symbol.upper()
+    spot = None
+    try:
+        ctx = await broker_gw.get_market_context(symbol)
+        spot = ctx.price
+    except Exception:
+        spot = None
+
+    try:
+        chain = await broker_gw.get_option_chain(symbol)
+        raw_contracts = [leg.model_dump() for leg in chain] if chain else None
+    except Exception:
+        raw_contracts = None
+
+    return await quant_gw.get_surface(symbol=symbol, spot=spot, chain=raw_contracts)
 
 @router.get("/stress", response_model=StressReport)
 async def get_stress_report(
