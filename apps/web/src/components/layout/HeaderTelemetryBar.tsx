@@ -76,6 +76,12 @@ export const HeaderTelemetryBar: React.FC = () => {
           color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400',
           dot: 'bg-cyan-400',
         };
+      case 'UNCAPPED_AUTONOMOUS':
+        return {
+          label: 'MODE: FREE TRADE (UNCAPPED)',
+          color: 'bg-purple-500/10 border-purple-500/40 text-purple-300 font-black',
+          dot: 'bg-purple-400 animate-pulse',
+        };
       case 'GUARDED_AUTONOMOUS':
       default:
         return {

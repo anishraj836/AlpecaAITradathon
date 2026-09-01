@@ -329,10 +329,11 @@ class MockOptionsIntelligenceGateway(OptionsIntelligenceGateway):
         self,
         strategy: StrategyCandidate,
         portfolio_equity: float = 1245892.12,
+        uncapped_mode: bool = False,
     ) -> RiskCheckResult:
-        # Deterministic pure-code risk rules (Person 1 canonical definition)
+        # Deterministic pure-code risk rules
         budget_pct = (strategy.maxLoss / portfolio_equity * 100.0) if portfolio_equity else 0.0
-        budget_passed = budget_pct <= 1.0
+        budget_passed = True if uncapped_mode else (budget_pct <= 1.0)
         liquidity_passed = strategy.liquidityScore >= 70
 
         return RiskCheckResult(

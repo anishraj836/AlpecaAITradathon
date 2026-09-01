@@ -188,7 +188,7 @@ export default function AgentsDashboardPage() {
           <div className="flex flex-wrap items-center gap-3">
             {/* Autonomy Level Switcher */}
             <div className="flex items-center bg-surface border border-outline-variant/40 rounded-sm p-0.5">
-              {(['COPILOT', 'GUARDED_AUTONOMOUS', 'AUTOPILOT'] as AutonomyLevel[]).map((mode) => (
+              {(['COPILOT', 'GUARDED_AUTONOMOUS', 'AUTOPILOT', 'UNCAPPED_AUTONOMOUS'] as AutonomyLevel[]).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -196,13 +196,21 @@ export default function AgentsDashboardPage() {
                   disabled={actionLoading}
                   className={`px-3 py-1 text-[11px] font-mono font-bold rounded-sm transition-all ${
                     daemon?.autonomyLevel === mode
-                      ? mode === 'AUTOPILOT'
+                      ? mode === 'UNCAPPED_AUTONOMOUS'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm font-black'
+                        : mode === 'AUTOPILOT'
                         ? 'bg-cyan-500 text-black shadow-sm'
                         : 'bg-primary text-on-primary shadow-sm'
                       : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
-                  {mode === 'COPILOT' ? 'COPILOT' : mode === 'GUARDED_AUTONOMOUS' ? 'GUARDED AUTO' : 'AUTOPILOT'}
+                  {mode === 'COPILOT'
+                    ? 'COPILOT'
+                    : mode === 'GUARDED_AUTONOMOUS'
+                    ? 'GUARDED AUTO'
+                    : mode === 'AUTOPILOT'
+                    ? 'AUTOPILOT'
+                    : '⚡ FREE TRADE (UNCAPPED)'}
                 </button>
               ))}
             </div>
@@ -269,6 +277,21 @@ export default function AgentsDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Free Trading Active Banner */}
+        {daemon?.autonomyLevel === 'UNCAPPED_AUTONOMOUS' && (
+          <div className="bg-purple-950/40 border border-purple-500/40 px-3.5 py-2.5 rounded-sm flex items-center justify-between font-mono text-xs text-purple-200 shadow-sm animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-purple-400 text-[18px]">lock_open_right</span>
+              <span>
+                <strong>FREE TRADING ACTIVE:</strong> The autonomous fleet is trading unrestricted with <strong>zero upper bounds</strong> on investment budget, allocation, or position sizing caps.
+              </span>
+            </div>
+            <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] font-bold rounded border border-purple-500/50 uppercase">
+              Full Buying Power
+            </span>
+          </div>
+        )}
 
         {/* Telemetry Metric Badges */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t border-outline-variant/20">

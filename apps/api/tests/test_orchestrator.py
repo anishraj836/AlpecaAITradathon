@@ -63,8 +63,8 @@ async def test_orchestrator_no_trade_path():
 
     # Create a custom mock quant that fails risk checks
     class FailingRiskQuant(MockOptionsIntelligenceGateway):
-        async def compile_risk(self, strategy, portfolio_equity):
-            res = await super().compile_risk(strategy, portfolio_equity)
+        async def compile_risk(self, strategy, portfolio_equity, *args, **kwargs):
+            res = await super().compile_risk(strategy, portfolio_equity, *args, **kwargs)
             res.isApproved = False
             res.budgetCheck.passed = False
             res.budgetCheck.status = "FAIL"

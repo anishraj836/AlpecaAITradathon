@@ -65,7 +65,7 @@ class AlpacaTradingService:
             limit_price = order_payload.limitPrice
 
         alpaca_payload: Dict[str, Any] = {
-            "qty": "1",
+            "qty": str(order_payload.qty if order_payload and order_payload.qty else 1),
             "type": "limit",
             "time_in_force": "day",
             "limit_price": str(limit_price),

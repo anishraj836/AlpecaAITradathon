@@ -88,7 +88,7 @@ class MlegOrderCompiler:
             compiled_legs.append(
                 MlegOrderLegPayload(
                     symbol=leg.symbol,
-                    ratio_qty=ratio * target_qty,
+                    ratio_qty=ratio,
                     side=side_lower, # type: ignore
                     position_intent=position_intent, # type: ignore
                 )
@@ -101,6 +101,7 @@ class MlegOrderCompiler:
 
         return MlegOrderPayload(
             symbol=underlying,
+            qty=target_qty,
             orderType="limit",
             timeInForce="day",
             limitPrice=limit_price,
@@ -175,7 +176,12 @@ class ExecutionService:
                 )
 
             # Step 5: Compile & Validate MLEG Order Payload
-            order_payload = MlegOrderCompiler.compile_and_validate(packet)
+            target_qty = 1
+            if packet.autonomyLevel == "UNCAPPED_AUTONOMOUS":
+                # Free Trading Mode: Scale position sizing dynamically without 1-contract bottleneck
+                target_qty = max(1, min(getattr(packet.riskCompilerResult, "maxContractsAllowed", 5), 10))
+
+            order_payload = MlegOrderCompiler.compile_and_validate(packet, target_qty=target_qty)
             packet.mlegOrderPayload = order_payload
 
             # Step 6: Dispatch Order to Broker Gateway (Paper Environment)

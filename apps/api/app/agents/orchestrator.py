@@ -299,7 +299,11 @@ class VoltronOrchestrator:
                 status="ACTIVE",
                 message="Deterministic Risk Compiler evaluating portfolio limits...",
             )
-            risk_result = await self.quant.compile_risk(selected_strategy, account.equity)
+            is_uncapped = active_autonomy == "UNCAPPED_AUTONOMOUS"
+            try:
+                risk_result = await self.quant.compile_risk(selected_strategy, account.equity, uncapped_mode=is_uncapped)
+            except TypeError:
+                risk_result = await self.quant.compile_risk(selected_strategy, account.equity)
             
             trace_5 = AgentTraceStep(
                 id="step-5",
@@ -407,7 +411,7 @@ class VoltronOrchestrator:
                     await self.session.commit()
 
             can_auto_execute = (
-                active_autonomy in ["GUARDED_AUTONOMOUS", "AUTOPILOT"]
+                active_autonomy in ["GUARDED_AUTONOMOUS", "AUTOPILOT", "UNCAPPED_AUTONOMOUS"]
                 and decision_status == "AWAITING_APPROVAL"
                 and self.session is not None
             )

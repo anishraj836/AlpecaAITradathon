@@ -64,6 +64,14 @@ const AUTONOMY_MODES: Array<{
     description: "Full continuous scanning and portfolio delta-hedging with active kill-switch and portfolio margin boundaries.",
     governance: "Circuit-breaker stops on 2% intraday drawdown.",
   },
+  {
+    level: "UNCAPPED_AUTONOMOUS",
+    title: "Level 4: Free Trade (Uncapped)",
+    badge: "Unrestricted Capital",
+    badgeColor: "border-purple-500/40 text-purple-300 bg-purple-500/10",
+    description: "The agent is free to trade with zero upper bounds on investment budget, position size, or portfolio allocation. Sizes freely using full broker buying power.",
+    governance: "Unrestricted execution on Alpaca Paper Broker.",
+  },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({

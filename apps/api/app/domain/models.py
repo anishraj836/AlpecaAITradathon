@@ -5,7 +5,7 @@ OptionType = Literal['CALL', 'PUT']
 PositionSide = Literal['BUY', 'SELL']
 OptionPositionIntent = Literal['buy_to_open', 'sell_to_open', 'buy_to_close', 'sell_to_close']
 AgentRole = Literal['RESEARCHER', 'VOLATILITY_ANALYST', 'STRATEGY_ANALYST', 'CRITIC', 'RISK_COMPILER']
-AutonomyLevel = Literal['COPILOT', 'GUARDED_AUTONOMOUS', 'AUTOPILOT']
+AutonomyLevel = Literal['COPILOT', 'GUARDED_AUTONOMOUS', 'AUTOPILOT', 'UNCAPPED_AUTONOMOUS']
 ExecutionMode = Literal['LLM_REASONING', 'HEURISTIC_FALLBACK']
 DecisionStatus = Literal[
     'CREATED',
@@ -191,6 +191,7 @@ class MlegOrderLegPayload(BaseModel):
 
 class MlegOrderPayload(BaseModel):
     symbol: str
+    qty: int = 1
     orderType: Literal['limit', 'market'] = 'limit'
     timeInForce: Literal['day'] = 'day'
     limitPrice: Optional[float] = None

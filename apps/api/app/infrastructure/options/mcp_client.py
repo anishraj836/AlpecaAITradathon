@@ -159,9 +159,10 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
         self,
         strategy: StrategyCandidate,
         portfolio_equity: float,
+        uncapped_mode: bool = False,
     ) -> RiskCheckResult:
         if settings.USE_MOCK_QUANT or not self.base_url:
-            return await self.mock_fallback.compile_risk(strategy, portfolio_equity)
+            return await self.mock_fallback.compile_risk(strategy, portfolio_equity, uncapped_mode=uncapped_mode)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
@@ -169,7 +170,11 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                     json={
                         "jsonrpc": "2.0",
                         "method": "compile_risk",
-                        "params": {"strategy": strategy.model_dump(), "portfolio_equity": portfolio_equity},
+                        "params": {
+                            "strategy": strategy.model_dump(),
+                            "portfolio_equity": portfolio_equity,
+                            "uncapped_mode": uncapped_mode,
+                        },
                         "id": 5,
                     },
                     timeout=10.0,
@@ -180,7 +185,7 @@ class VoltronOptionsMCPClient(OptionsIntelligenceGateway):
                         return RiskCheckResult.model_validate(result)
         except Exception:
             pass
-        return await self.mock_fallback.compile_risk(strategy, portfolio_equity)
+        return await self.mock_fallback.compile_risk(strategy, portfolio_equity, uncapped_mode=uncapped_mode)
 
     async def get_agent_trace(self, decision_id: str) -> List[AgentTraceStep]:
         return await self.mock_fallback.get_agent_trace(decision_id)

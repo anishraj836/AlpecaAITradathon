@@ -384,7 +384,7 @@ export default function CommandTerminalPage() {
               <span className="font-label-xs text-label-xs text-outline uppercase tracking-wider">
                 Execution Autonomy Spectrum
               </span>
-              <div className="grid grid-cols-3 gap-2 max-w-2xl">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-w-4xl">
                 <button
                   type="button"
                   onClick={() => setAutonomyLevel('COPILOT')}
@@ -430,7 +430,23 @@ export default function CommandTerminalPage() {
                     <span>Level 3: Autopilot</span>
                     <span className="text-[10px] font-mono opacity-80">AGENT</span>
                   </div>
-                  <div className="text-[10px] text-outline mt-0.5">Continuous Loop + Circuit Breaker</div>
+                  <div className="text-[10px] text-outline mt-0.5">Continuous Loop + 5% Budget Cap</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAutonomyLevel('UNCAPPED_AUTONOMOUS')}
+                  className={`p-2.5 rounded border text-left transition-all ${
+                    autonomyLevel === 'UNCAPPED_AUTONOMOUS'
+                      ? 'border-purple-500 bg-purple-500/20 text-purple-200 shadow-sm'
+                      : 'border-outline-variant/30 bg-surface-container/60 text-on-surface-variant hover:border-outline-variant'
+                  }`}
+                >
+                  <div className="font-semibold text-xs flex items-center justify-between">
+                    <span>Level 4: Free Trade</span>
+                    <span className="text-[10px] font-mono text-purple-300 font-bold">UNCAPPED</span>
+                  </div>
+                  <div className="text-[10px] text-outline mt-0.5">Zero Investment & Allocation Caps</div>
                 </button>
               </div>
             </div>

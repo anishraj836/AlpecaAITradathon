@@ -269,11 +269,17 @@ class AutonomousAgentService:
                 )
 
                 # Execute 100% genuine multi-agent pipeline
+                is_free_trade = self._autonomy_level == "UNCAPPED_AUTONOMOUS"
+                mandate_text = (
+                    f"Unrestricted free-trade volatility scan with zero investment cap on {symbol}"
+                    if is_free_trade
+                    else f"Autonomous volatility scan and delta-neutral harvest on {symbol}"
+                )
                 packet = await orchestrator.execute_mandate(
-                    mandate=f"Autonomous volatility scan and delta-neutral harvest on {symbol}",
+                    mandate=mandate_text,
                     symbol=symbol,
                     target_delta=0.15,
-                    budget=50000.0,
+                    budget=500000.0 if is_free_trade else 50000.0,
                     autonomy_level=self._autonomy_level,
                 )
 
@@ -451,7 +457,8 @@ class AutonomousAgentService:
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", "User resumed the autonomous worker loop.")
         elif req.action == "SET_AUTONOMY" and req.autonomyLevel:
             self._autonomy_level = req.autonomyLevel
-            self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Autonomy mode switched to {req.autonomyLevel}.")
+            desc = "⚡ FREE TRADING MODE (Zero investment upper bounds / Free Margin Sizing)" if req.autonomyLevel == "UNCAPPED_AUTONOMOUS" else req.autonomyLevel
+            self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Autonomy mode switched to {desc}.")
         elif req.action == "SET_RATE_LIMIT_GUARD":
             enabled = bool(req.rateLimitGuardEnabled)
             self._rate_limit_guard = enabled

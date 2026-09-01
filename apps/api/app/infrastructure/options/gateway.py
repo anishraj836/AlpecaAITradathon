@@ -61,6 +61,7 @@ class OptionsIntelligenceGateway(ABC):
         self,
         strategy: StrategyCandidate,
         portfolio_equity: float,
+        uncapped_mode: bool = False,
     ) -> RiskCheckResult:
         """
         Execute deterministic pure-code risk compiler checks (budget, liquidity, concentration).

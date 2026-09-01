@@ -139,7 +139,7 @@ export type AgentRole =
   | 'CRITIC'
   | 'RISK_COMPILER';
 
-export type AutonomyLevel = 'COPILOT' | 'GUARDED_AUTONOMOUS' | 'AUTOPILOT';
+export type AutonomyLevel = 'COPILOT' | 'GUARDED_AUTONOMOUS' | 'AUTOPILOT' | 'UNCAPPED_AUTONOMOUS';
 export type ExecutionMode = 'LLM_REASONING' | 'HEURISTIC_FALLBACK';
 
 export interface AgentTraceStep {

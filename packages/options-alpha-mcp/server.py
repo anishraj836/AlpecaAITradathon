@@ -136,9 +136,9 @@ def handle_stress_test(
         net_credit=net_credit,
     )
 
-def handle_compile_risk(strategy: Dict[str, Any], portfolio_equity: float) -> Dict[str, Any]:
+def handle_compile_risk(strategy: Dict[str, Any], portfolio_equity: float, uncapped_mode: bool = False) -> Dict[str, Any]:
     """Execute deterministic pure-code risk compiler checks."""
-    return compile_deterministic_risk(strategy=strategy, portfolio_equity=portfolio_equity)
+    return compile_deterministic_risk(strategy=strategy, portfolio_equity=portfolio_equity, uncapped_mode=uncapped_mode)
 
 def handle_get_counterfactual(params: Dict[str, Any]) -> Dict[str, Any]:
     """Evaluate counterfactual portfolio impacts by varying delta, DTE, and risk budget."""
@@ -223,7 +223,8 @@ async def jsonrpc_handler(request: JsonRpcRequest):
         elif method == "compile_risk":
             strategy = params.get("strategy", {})
             portfolio_equity = float(params.get("portfolio_equity", 100000.0))
-            return JsonRpcResponse(result=handle_compile_risk(strategy, portfolio_equity), id=request.id)
+            uncapped_mode = bool(params.get("uncapped_mode", False))
+            return JsonRpcResponse(result=handle_compile_risk(strategy, portfolio_equity, uncapped_mode=uncapped_mode), id=request.id)
 
         elif method == "get_counterfactual":
             sub_params = params.get("params", {})
