@@ -441,16 +441,30 @@ class VoltronOrchestrator:
                         logger.info(f"[{decision_id}] AUTONOMOUS EXECUTION ({active_autonomy}): Risk gate passed and market is OPEN. Routing directly to Alpaca...")
                         exec_service = ExecutionService(self.session, self.broker)
                         order_result = await exec_service.approve_and_execute(decision_id)
-                        packet.status = "APPROVED"
-
-                        await self._emit_event(
-                            decision_id=decision_id,
-                            event_type="autonomous_order_executed",
-                            stage="EXECUTION",
-                            status="COMPLETE",
-                            message=f"🚀 Autonomous Quant Execution ({active_autonomy}): Order {order_result.orderId} status '{order_result.status}' on {order_result.broker}",
-                            payload=order_result.model_dump(),
-                        )
+                        if order_result.status in ("accepted", "filled", "new", "partially_filled", "held"):
+                            packet.status = "APPROVED"
+                            await self._emit_event(
+                                decision_id=decision_id,
+                                event_type="autonomous_order_executed",
+                                stage="EXECUTION",
+                                status="COMPLETE",
+                                message=f"🚀 Autonomous Quant Execution ({active_autonomy}): Order {order_result.orderId} status '{order_result.status}' on {order_result.broker}",
+                                payload=order_result.model_dump(),
+                            )
+                        else:
+                            packet.status = "REJECTED"
+                            err = "Broker rejected order"
+                            if isinstance(order_result.rawResponse, dict):
+                                err = order_result.rawResponse.get("error") or str(order_result.rawResponse)
+                            logger.warning(f"[{decision_id}] Order rejected by broker: {err}")
+                            await self._emit_event(
+                                decision_id=decision_id,
+                                event_type="broker_order_rejected",
+                                stage="EXECUTION",
+                                status="FAILED",
+                                message=f"❌ Broker Order Rejected ({order_result.status}): {err}",
+                                payload=order_result.model_dump(),
+                            )
                     else:
                         # 🌙 AUTOPILOT PAPER QUEUE: Auto-approves paper orders even outside hours
                         auto_order_id = f"ALP-AUTO-{decision_id}"

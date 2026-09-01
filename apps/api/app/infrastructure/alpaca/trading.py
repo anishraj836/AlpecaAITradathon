@@ -112,11 +112,11 @@ class AlpacaTradingService:
                 logger.error(f"Alpaca Order Error ({resp.status_code}): {resp.text} | Payload: {alpaca_payload}")
                 now_dt = _utc_now()
                 return OrderResult(
-                    orderId=f"ALP-REJECTED-{now_dt.strftime('%M%S')}",
+                    orderId=f"ALP-REJECTED-{decision.id}",
                     decisionId=decision.id,
                     clientOrderId=f"cl-{decision.id}",
                     status="rejected",
-                    filledAt=now_dt.isoformat() + "Z",
+                    filledAt=None,
                     avgPrice=limit_price,
                     broker="ALPACA_PAPER",
                     rawResponse={"error": error_msg, "status_code": resp.status_code, "original_payload": alpaca_payload},

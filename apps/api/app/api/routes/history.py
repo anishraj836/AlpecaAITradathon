@@ -3,6 +3,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.database.repositories.decisions import DecisionRepository
+from app.infrastructure.database.repositories.orders import OrderRepository
 from app.domain.models import HistoricalDecisionSummary
 
 router = APIRouter(prefix="/history", tags=["History"])
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/history", tags=["History"])
 @router.get("", response_model=List[HistoricalDecisionSummary])
 async def get_history(session: AsyncSession = Depends(get_db_session)):
     repo = DecisionRepository(session)
+    order_repo = OrderRepository(session)
     decisions = await repo.list_recent(limit=50)
     
     summaries: List[HistoricalDecisionSummary] = []
@@ -24,6 +26,14 @@ async def get_history(session: AsyncSession = Depends(get_db_session)):
         is_rejected = status_raw == "REJECTED"
         dec_label = "Approved" if is_executed else ("Rejected" if is_rejected else "No Trade")
 
+        # Query actual order execution records
+        orders = await order_repo.get_by_decision(d.id)
+        has_filled_order = any(o.status == "filled" for o in orders)
+
+        # Honest PnL tracking: Open positions have 0.0 realized outcome until closed
+        outcome_amt = 0.0
+        is_profit = False
+
         summaries.append(
             HistoricalDecisionSummary(
                 id=d.id,
@@ -33,29 +43,11 @@ async def get_history(session: AsyncSession = Depends(get_db_session)):
                 strategyName=strat.get("name", "Iron Condor"),
                 decision=dec_label, # type: ignore
                 riskAmount=float(strat.get("maxLoss", 0.0)) if is_executed else 0.0,
-                outcomeAmount=float(strat.get("maxProfit", 0.0)) if is_executed else 0.0,
-                isProfit=is_executed,
+                outcomeAmount=outcome_amt,
+                isProfit=is_profit,
                 pop=float(strat.get("pop", 0.684)),
                 legsSummary=legs_summary,
             )
         )
 
-    # Fallback to demo items if DB has < 2 records
-    if len(summaries) < 2:
-        summaries.insert(
-            0,
-            HistoricalDecisionSummary(
-                id="HIST-001",
-                timestamp="2026-08-29T10:42:15Z",
-                timeFormatted="10:42:15 EST",
-                symbol="SPY",
-                strategyName="Iron Condor",
-                decision="Approved",
-                riskAmount=362.0,
-                outcomeAmount=138.0,
-                isProfit=True,
-                pop=0.684,
-                legsSummary="625/630/660/665",
-            )
-        )
     return summaries

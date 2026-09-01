@@ -6,74 +6,73 @@ from app.domain.models import PortfolioSummary, DiversificationAnalysis, AssetAl
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
-def _build_diversification_analysis(equity: float) -> DiversificationAnalysis:
-    total_eq = equity if equity > 0 else 100000.0
+def _build_diversification_analysis(equity: float, positions: List[Any], cash: float) -> DiversificationAnalysis:
+    total_eq = equity if equity > 0 else (cash if cash > 0 else 100000.0)
+    
+    # Dynamic calculation of allocations from real Alpaca positions
+    allocations: List[AssetAllocation] = []
+    symbol_positions: Dict[str, float] = {}
+    symbol_pnl: Dict[str, float] = {}
+
+    for pos in positions:
+        sym = getattr(pos, "underlying", None) or getattr(pos, "symbol", "UNKNOWN")
+        mv = abs(float(getattr(pos, "marketValue", 0.0)))
+        pl = float(getattr(pos, "unrealizedPl", 0.0))
+        symbol_positions[sym] = symbol_positions.get(sym, 0.0) + mv
+        symbol_pnl[sym] = symbol_pnl.get(sym, 0.0) + pl
+
+    allocated_pos_val = sum(symbol_positions.values())
+    cash_amount = max(0.0, cash if cash > 0 else (total_eq - allocated_pos_val))
+
+    for sym, val in symbol_positions.items():
+        weight = round((val / total_eq) * 100.0, 2)
+        allocations.append(
+            AssetAllocation(
+                symbol=sym,
+                assetClass="Options Spread",
+                weightPct=weight,
+                allocatedAmount=round(val, 2),
+                currentPnl=round(symbol_pnl.get(sym, 0.0), 2),
+                beta=1.0,
+                ivRank=50.0,
+                strategyType="Live Broker Position",
+            )
+        )
+
+    cash_weight = round((cash_amount / total_eq) * 100.0, 2)
+    allocations.append(
+        AssetAllocation(
+            symbol="CASH",
+            assetClass="Margin / Cash Reserve",
+            weightPct=cash_weight,
+            allocatedAmount=round(cash_amount, 2),
+            currentPnl=0.0,
+            beta=0.0,
+            ivRank=0.0,
+            strategyType="Cash Buffer",
+        )
+    )
+
+    # Calculate real HHI (Herfindahl-Hirschman Index)
+    hhi = sum((a.weightPct / 100.0) ** 2 for a in allocations)
+    max_single_pct = max((a.weightPct for a in allocations), default=100.0)
+    div_score = round(max(10.0, min(100.0, (1.0 - hhi) * 100.0 + 10.0)), 1)
+    
+    rating = "OPTIMALLY BALANCED" if div_score >= 70 else ("MODERATE CONCENTRATION" if div_score >= 40 else "HIGH CONCENTRATION")
+
     return DiversificationAnalysis(
-        diversificationScore=88,
-        rating="OPTIMALLY BALANCED",
-        betaWeightedDelta=0.04,
-        hhiConcentration=0.28,
-        maxSingleAssetPct=35.0,
+        diversificationScore=div_score,
+        rating=rating,
+        betaWeightedDelta=0.0,
+        hhiConcentration=round(hhi, 3),
+        maxSingleAssetPct=round(max_single_pct, 1),
         correlationMatrix={
-            "SPY": {"SPY": 1.00, "QQQ": 0.84, "IWM": 0.72, "GLD": -0.08, "TLT": -0.32},
-            "QQQ": {"SPY": 0.84, "QQQ": 1.00, "IWM": 0.68, "GLD": -0.12, "TLT": -0.38},
-            "IWM": {"SPY": 0.72, "QQQ": 0.68, "IWM": 1.00, "GLD": 0.02, "TLT": -0.24},
-            "GLD": {"SPY": -0.08, "QQQ": -0.12, "IWM": 0.02, "GLD": 1.00, "TLT": 0.28},
-            "TLT": {"SPY": -0.32, "QQQ": -0.38, "IWM": -0.24, "GLD": 0.28, "TLT": 1.00},
+            "SPY": {"SPY": 1.00, "QQQ": 0.84, "IWM": 0.72},
+            "QQQ": {"SPY": 0.84, "QQQ": 1.00, "IWM": 0.68},
+            "IWM": {"SPY": 0.72, "QQQ": 0.68, "IWM": 1.00},
         },
-        allocations=[
-            AssetAllocation(
-                symbol="SPY",
-                assetClass="Macro Core Index",
-                weightPct=35.0,
-                allocatedAmount=round(total_eq * 0.35, 2),
-                currentPnl=84.0,
-                beta=1.00,
-                ivRank=68.2,
-                strategyType="Iron Condor (15Δ)",
-            ),
-            AssetAllocation(
-                symbol="QQQ",
-                assetClass="Tech Growth Beta",
-                weightPct=25.0,
-                allocatedAmount=round(total_eq * 0.25, 2),
-                currentPnl=62.0,
-                beta=1.25,
-                ivRank=74.5,
-                strategyType="Put Credit Spread (25Δ)",
-            ),
-            AssetAllocation(
-                symbol="IWM",
-                assetClass="Small-Cap Cyclical",
-                weightPct=20.0,
-                allocatedAmount=round(total_eq * 0.20, 2),
-                currentPnl=-18.0,
-                beta=1.15,
-                ivRank=61.0,
-                strategyType="Iron Condor (20Δ)",
-            ),
-            AssetAllocation(
-                symbol="GLD",
-                assetClass="Macro Safe-Haven",
-                weightPct=10.0,
-                allocatedAmount=round(total_eq * 0.10, 2),
-                currentPnl=12.0,
-                beta=0.05,
-                ivRank=42.0,
-                strategyType="Long Strangle Hedge",
-            ),
-            AssetAllocation(
-                symbol="CASH",
-                assetClass="Margin / Risk Reserve",
-                weightPct=10.0,
-                allocatedAmount=round(total_eq * 0.10, 2),
-                currentPnl=0.0,
-                beta=0.00,
-                ivRank=0.0,
-                strategyType="Dry Powder Buffer",
-            ),
-        ],
-        rebalanceRecommendation="Multi-asset theta engine is balanced. Max single-asset concentration is 35% (SPY). Portfolio beta-weighted delta is neutral (+0.04).",
+        allocations=allocations,
+        rebalanceRecommendation=f"Portfolio has {len(positions)} active positions. Cash reserve at {cash_weight:.1f}%.",
     )
 
 @router.get("", response_model=PortfolioSummary)
@@ -81,18 +80,41 @@ async def get_portfolio_summary(broker_gw: BrokerGateway = Depends(get_broker_ga
     account = await broker_gw.get_account()
     positions = await broker_gw.get_positions()
     
-    total_unrealized = sum(p.unrealizedPl for p in positions)
-    diversification = _build_diversification_analysis(account.equity)
+    total_unrealized = round(sum(p.unrealizedPl for p in positions), 2) if positions else 0.0
+
+    net_delta = 0.0
+    net_theta = 0.0
+    net_vega = 0.0
+    net_gamma = 0.0
+
+    for p in positions:
+        is_option = len(p.symbol) > 6 and any(c.isdigit() for c in p.symbol)
+        multiplier = 100.0 if is_option else 1.0
+        pos_qty = p.qty if p.side == "long" else -p.qty
+        if not is_option:
+            net_delta += pos_qty * 1.0
+        else:
+            is_call = "C" in p.symbol[-9:]
+            base_delta = 0.5 if is_call else -0.5
+            net_delta += pos_qty * base_delta * multiplier
+            net_theta += -0.05 * abs(pos_qty) * multiplier
+
+    net_delta = round(net_delta, 4)
+    net_theta = round(net_theta, 2)
+    net_vega = round(net_vega, 2)
+    net_gamma = round(net_gamma, 4)
+
+    diversification = _build_diversification_analysis(account.equity, positions, account.cash)
     
     return PortfolioSummary(
         account=account,
         positions=positions,
-        netDelta=0.12,
-        netTheta=48.50,
-        netVega=-12.40,
-        netGamma=0.008,
-        unrealizedPnl=total_unrealized if positions else 84.00,
-        realizedTodayPnl=138.00,
+        netDelta=net_delta,
+        netTheta=net_theta,
+        netVega=net_vega,
+        netGamma=net_gamma,
+        unrealizedPnl=total_unrealized,
+        realizedTodayPnl=0.0,
         profitTargetPct=50.0,
         stopLossMultiplier=2.0,
         diversification=diversification,

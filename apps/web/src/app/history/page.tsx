@@ -25,6 +25,12 @@ export default function DecisionHistoryPage() {
 
   const selectedItem = historyItems.find((h) => h.id === selectedId) || historyItems[0];
 
+  const totalDecisions = historyItems.length;
+  const approvedCount = historyItems.filter((h) => h.decision === "Approved").length;
+  const approvalRate = totalDecisions > 0 ? ((approvedCount / totalDecisions) * 100).toFixed(1) : "0.0";
+  const totalRisk = historyItems.reduce((acc, h) => acc + (h.riskAmount || 0), 0);
+  const netOutcome = historyItems.reduce((acc, h) => acc + (h.isProfit ? h.outcomeAmount : -(h.riskAmount || 0)), 0);
+
   return (
     <div className="flex flex-col w-full gap-container-gap pb-container-gap">
       {/* Top Visual Summary Metrics */}
@@ -35,7 +41,7 @@ export default function DecisionHistoryPage() {
               Session Decisions
             </span>
             <span className="font-display-lg text-display-lg text-on-surface font-mono font-bold">
-              14
+              {totalDecisions}
             </span>
           </div>
           <div className="flex flex-col items-end z-10">
@@ -43,7 +49,7 @@ export default function DecisionHistoryPage() {
               Approval Rate
             </span>
             <span className="font-headline-md text-headline-md text-primary-fixed font-mono font-bold">
-              64.2%
+              {approvalRate}%
             </span>
           </div>
         </div>
@@ -54,15 +60,15 @@ export default function DecisionHistoryPage() {
               Total Risk Deployed
             </span>
             <span className="font-display-lg text-display-lg text-on-surface font-mono font-bold">
-              $14,250
+              ${totalRisk.toLocaleString()}
             </span>
           </div>
           <div className="flex flex-col items-end z-10">
             <span className="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-widest mb-1">
               Net Outcome
             </span>
-            <span className="font-headline-md text-headline-md text-primary-fixed font-mono font-bold">
-              +$1,842
+            <span className={`font-headline-md text-headline-md font-mono font-bold ${netOutcome >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
+              {netOutcome >= 0 ? `+$${netOutcome.toLocaleString()}` : `-$${Math.abs(netOutcome).toLocaleString()}`}
             </span>
           </div>
         </div>

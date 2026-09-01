@@ -240,8 +240,11 @@ def _build_option_leg(
 
     # Analytical Black-Scholes pricing
     exp_dt = datetime.now(timezone.utc) + timedelta(days=dte)
-    exp_date = exp_dt.strftime("%Y-%m-%d")
-    exp_code = exp_dt.strftime("%y%m%d")
+    # Ensure expiration is strictly a valid standard Friday
+    days_to_friday = (4 - exp_dt.weekday()) % 7
+    exp_friday = exp_dt + timedelta(days=days_to_friday)
+    exp_date = exp_friday.strftime("%Y-%m-%d")
+    exp_code = exp_friday.strftime("%y%m%d")
 
     price = black_scholes_price(spot, strike, t_exp, rate, base_iv, enum_type)
     mid = round(max(0.05, price), 2)
@@ -277,10 +280,11 @@ def _find_chain_contract(
     chain: Optional[List[Dict[str, Any]]],
     strike: float,
     opt_type: str,
+    max_tolerance: float = 5.0,
 ) -> Optional[Dict[str, Any]]:
     """
-    Search real Alpaca option chain for the contract with matching type and exact strike.
-    Enforces strict tolerance (<= 0.05) to protect spread geometry and defined-risk boundaries.
+    Search real Alpaca option chain for the contract with matching type and closest available strike.
+    Snaps to real tradeable market contracts to guarantee valid exchange execution.
     """
     if not chain:
         return None
@@ -291,9 +295,9 @@ def _find_chain_contract(
     ]
     if not matching:
         return None
-    # Find exact matching contract (within $0.05 tolerance)
+    # Find closest available contract
     closest = min(matching, key=lambda c: abs(float(c.get("strike", 0.0)) - strike))
-    if abs(float(closest.get("strike", 0.0)) - strike) <= 0.05:
+    if abs(float(closest.get("strike", 0.0)) - strike) <= max_tolerance:
         return closest
     return None
 
@@ -345,6 +349,18 @@ def generate_iron_condor(
     actual_sc = float(c_sc.get("strike", sc)) if c_sc else sc
     actual_lc = float(c_lc.get("strike", lc)) if c_lc else lc
 
+    # Enforce strict monotonic wing ordering: lp < sp < sc < lc
+    if actual_sp <= actual_lp:
+        actual_lp = actual_sp - width
+        c_lp = _find_chain_contract(chain, actual_lp, "PUT")
+    if actual_sc <= actual_sp:
+        actual_sc = actual_sp + step
+        c_lc = actual_sc + width
+        c_sc = _find_chain_contract(chain, actual_sc, "CALL")
+    if actual_lc <= actual_sc:
+        actual_lc = actual_sc + width
+        c_lc = _find_chain_contract(chain, actual_lc, "CALL")
+
     # Build legs
     leg1 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-1", base_iv=0.26, chain_contract=c_lp)
     leg2 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-2", base_iv=0.25, chain_contract=c_sp)
@@ -375,9 +391,8 @@ def generate_iron_condor(
         "liquidityScore": liq,
         "breakevens": bes,
         "rationale": [
-            f"Target ~{int(target_delta*100)}Δ wings: Expected to remain range-bound between ${actual_sp:.2f} and ${actual_sc:.2f}.",
-            "Captures volatility skew advantage on both put and call wings.",
-            f"Strictly defined risk (${bounds['maxLoss']:.2f} max loss) fits portfolio parameters.",
+            f"Neutral delta harvest on {symbol} across ${actual_sp:.2f}/${actual_sc:.2f} strikes with bounded defined-risk wings.",
+            "Collects net premium with favorable risk-reward ratio and high mathematical probability.",
         ],
         "legs": [leg1, leg2, leg3, leg4],
         "rejectionReason": None,
@@ -404,6 +419,10 @@ def generate_put_credit_spread(
     c_sp = _find_chain_contract(chain, sp, "PUT")
     actual_lp = float(c_lp.get("strike", lp)) if c_lp else lp
     actual_sp = float(c_sp.get("strike", sp)) if c_sp else sp
+
+    if actual_sp <= actual_lp:
+        actual_lp = actual_sp - width
+        c_lp = _find_chain_contract(chain, actual_lp, "PUT")
 
     leg5 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-5", base_iv=0.26, chain_contract=c_lp)
     leg6 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-6", base_iv=0.25, chain_contract=c_sp)
@@ -456,6 +475,10 @@ def generate_call_credit_spread(
     c_lc = _find_chain_contract(chain, lc, "CALL")
     actual_sc = float(c_sc.get("strike", sc)) if c_sc else sc
     actual_lc = float(c_lc.get("strike", lc)) if c_lc else lc
+
+    if actual_lc <= actual_sc:
+        actual_lc = actual_sc + width
+        c_lc = _find_chain_contract(chain, actual_lc, "CALL")
 
     leg7 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-7", base_iv=0.22, chain_contract=c_sc)
     leg8 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-8", base_iv=0.23, chain_contract=c_lc)

@@ -43,10 +43,10 @@ class AutonomousAgentService:
         self._current_cycle_seconds = 0
         self._rate_limit_guard = True
         quota_guard.set_enabled(True)
-        self._total_cycles = 142
-        self._total_orders = 19
-        self._total_rejected = 7
-        self._total_dislocations = 84
+        self._total_cycles = 0
+        self._total_orders = 0
+        self._total_rejected = 0
+        self._total_dislocations = 0
         self._last_scan_at = _now_iso()
         self._next_scan_at = _now_iso()
         self._lock = asyncio.Lock()
@@ -71,13 +71,13 @@ class AutonomousAgentService:
                 currentSymbol="SPY",
                 currentTask="Streaming real-time order-book & financial news sentiment",
                 progressPct=100,
-                latencyMs=182,
+                latencyMs=0,
                 model="Gemini 1.5 Pro / Alpaca Live Feed",
                 lastActiveAt=_now_iso(),
-                successfulRuns=142,
+                successfulRuns=0,
                 errorCount=0,
-                confidenceScore=0.94,
-                lastFinding="Macro regime is calm. Low inflation beta. High retail call flow in mega-cap tech.",
+                confidenceScore=0.90,
+                lastFinding="Autonomous agent initialized and monitoring live market stream.",
             ),
             "VOLATILITY_ANALYST": AgentFleetStatus(
                 id="agent-vol-01",
@@ -88,13 +88,13 @@ class AutonomousAgentService:
                 currentSymbol="SPY",
                 currentTask="Evaluating multi-strike surface & 25Δ put/call skew via Quant MCP",
                 progressPct=100,
-                latencyMs=215,
+                latencyMs=0,
                 model="Quant MCP Engine (Deterministic C-Math)",
                 lastActiveAt=_now_iso(),
-                successfulRuns=142,
+                successfulRuns=0,
                 errorCount=0,
-                confidenceScore=0.96,
-                lastFinding="ATM IV at 16.8%, 25Δ Put IV at 21.4%. Surface exhibits normal skew structure.",
+                confidenceScore=0.90,
+                lastFinding="Quant MCP online on port 8001.",
             ),
             "STRATEGY_SPECIALIST": AgentFleetStatus(
                 id="agent-strat-01",
@@ -105,13 +105,13 @@ class AutonomousAgentService:
                 currentSymbol="SPY",
                 currentTask="Synthesizing delta-neutral structures with Acklam inverse-CDF strikes",
                 progressPct=100,
-                latencyMs=194,
+                latencyMs=0,
                 model="Gemini 1.5 Pro / Quant Strategy Compiler",
                 lastActiveAt=_now_iso(),
-                successfulRuns=142,
+                successfulRuns=0,
                 errorCount=0,
-                confidenceScore=0.91,
-                lastFinding="Constructed 15Δ Iron Condor yielding favorable net credit with 82% POP.",
+                confidenceScore=0.90,
+                lastFinding="Black-Scholes analytical solver ready.",
             ),
             "RISK_CRITIC": AgentFleetStatus(
                 id="agent-critic-01",
@@ -122,33 +122,15 @@ class AutonomousAgentService:
                 currentSymbol="SPY",
                 currentTask="Subjecting candidate to -15% Black-Swan shock and margin gate checks",
                 progressPct=100,
-                latencyMs=145,
+                latencyMs=0,
                 model="Deterministic Risk Gate / Alpaca Margin Enforcer",
                 lastActiveAt=_now_iso(),
-                successfulRuns=142,
+                successfulRuns=0,
                 errorCount=0,
-                confidenceScore=0.98,
-                lastFinding="Candidate passes all 6 risk filters. Max portfolio drawdown strictly bounded.",
+                confidenceScore=0.90,
+                lastFinding="Deterministic risk compiler armed.",
             ),
         }
-
-        # Seed initial authentic logs
-        self._seed_initial_logs()
-
-    def _seed_initial_logs(self):
-        initial_entries = [
-            ("RESEARCHER", "Market Intelligence & News Agent", "INFO", "SPY", "Ingested latest macro headlines. FOMC tone neutral, VIX term structure in contango."),
-            ("VOLATILITY_ANALYST", "Quantitative Volatility Analyst", "INFO", "SPY", "Quant MCP calculated SPY surface: ATM IV 16.8%, 25Δ Put IV 21.4% (calm index regime)."),
-            ("STRATEGY_SPECIALIST", "Multi-Leg Options Architect", "INFO", "SPY", "Synthesized baseline delta-neutral Iron Condor. POP 82.4%, Sharpe 2.14."),
-            ("RISK_CRITIC", "Adversarial Risk & Stress Critic", "SUCCESS", "SPY", "Deterministic risk compiler verified: Margin requirement $2,500 < $10,000 budget. Status: PASSED."),
-            ("RESEARCHER", "Market Intelligence & News Agent", "THINKING", "PLTR", "Scanning news wire for enterprise AI contract updates and earnings whispers."),
-            ("VOLATILITY_ANALYST", "Quantitative Volatility Analyst", "WARNING", "PLTR", "Statistical dislocation detected: Put Skew Ratio 1.43x is +5.2σ above 30-day mean."),
-            ("STRATEGY_SPECIALIST", "Multi-Leg Options Architect", "THINKING", "PLTR", "Targeting 15Δ wings via Acklam inverse-CDF: Strike selection Short Put $175, Short Call $195."),
-            ("RISK_CRITIC", "Adversarial Risk & Stress Critic", "SUCCESS", "PLTR", "Stress-tested candidate under 1987 crash scenario: Risk gate passed."),
-            ("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "DISPATCH", "PLTR", "Decision packet DEC-PLTR-4819 ready. Autonomy mode: GUARDED_AUTONOMOUS (Holding for 1-click human execution)."),
-        ]
-        for role, name, level, sym, msg in initial_entries:
-            self._append_log(role, name, level, msg, sym)
 
     def _append_log(self, role: str, name: str, level: str, message: str, symbol: Optional[str] = None, details: Optional[Dict[str, Any]] = None, timestamp: Optional[str] = None):
         entry = AgentLogEntry(
@@ -179,10 +161,13 @@ class AutonomousAgentService:
                 ex = r_exec.scalar() or 0
                 rej = r_rej.scalar() or 0
 
-                if tot > 0:
-                    self._total_cycles = max(self._total_cycles, tot)
-                    self._total_orders = max(self._total_orders, ex)
-                    self._total_rejected = max(self._total_rejected, rej)
+                self._total_cycles = tot
+                self._total_orders = ex
+                self._total_rejected = rej
+
+                # Query real dislocations count from decisions
+                r_dis = await session.execute(text("SELECT count(*) FROM decisions WHERE json_extract(packet_json, '$.criticAnalysis.isApproved') = 1"))
+                self._total_dislocations = r_dis.scalar() or 0
 
                 # Fetch real historical decisions to display in console
                 recent_res = await session.execute(
@@ -385,7 +370,7 @@ class AutonomousAgentService:
                         "RISK_CRITIC",
                         c.name,
                         "WARNING",
-                        f"Deterministic Risk Gate REJECTED {packet.strategy.name} on {symbol}. Reason: {packet.criticAnalysis.details[:120]} (Capital Preserved).",
+                        f"Risk Gate or Broker REJECTED {packet.strategy.name} on {symbol}. Reason: {packet.criticAnalysis.details[:120]} (Capital Preserved).",
                         symbol,
                     )
                 elif packet.status in ("EXECUTED", "APPROVED"):
@@ -402,12 +387,13 @@ class AutonomousAgentService:
                         "AUTONOMOUS_DAEMON",
                         "Autonomous Worker Loop",
                         "DISPATCH",
-                        f"Decision packet {packet.id} ready. Autonomy mode: {packet.autonomyLevel}. Awaiting 1-click execution in Command Center.",
+                        f"Decision packet {packet.id} ready. Autonomy mode: {packet.autonomyLevel}. Awaiting review in Decision Room.",
                         symbol,
                     )
 
                 self._total_cycles += 1
-                self._total_dislocations += 1
+                if packet.evidence and (getattr(packet.evidence, "putSkewElevated", False) or getattr(packet.evidence, "ivRankElevated", False)):
+                    self._total_dislocations += 1
 
                 # Broadcast live SSE update
                 await broadcaster.broadcast(OrchestratorEvent(

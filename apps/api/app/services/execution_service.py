@@ -197,8 +197,14 @@ class ExecutionService:
                 )
                 await self.order_repo.save_order(order_model)
 
-                # Step 8: Update Decision Status to APPROVED
-                packet.status = "APPROVED"
+                # Step 8: Update Decision Status based on real broker outcome
+                if order_result.status in ("accepted", "filled", "new", "partially_filled", "held"):
+                    packet.status = "APPROVED"
+                    logger.info(f"[{decision_id}] Successfully approved and executed paper order: {order_result.orderId}")
+                else:
+                    packet.status = "REJECTED"
+                    logger.warning(f"[{decision_id}] Broker rejected order: {order_result.orderId}. Status: {order_result.status}")
+
                 await self.dec_repo.save(packet)
                 await self.session.commit()
             except IntegrityError:
@@ -216,7 +222,6 @@ class ExecutionService:
                         rawResponse=existing_order.raw_payload,
                     )
 
-            logger.info(f"[{decision_id}] Successfully approved and executed paper order: {order_result.orderId}")
             return order_result
 
     async def reject_decision(self, decision_id: str) -> bool:

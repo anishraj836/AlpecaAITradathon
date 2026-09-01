@@ -45,18 +45,25 @@ class AlpacaOptionsService:
             return res
 
         async with httpx.AsyncClient() as client:
-            params: Dict[str, Any] = {"underlying_symbols": symbol, "status": "active", "limit": 60}
-            if expiration_gte:
-                params["expiration_date_gte"] = expiration_gte
-            if expiration_lte:
-                params["expiration_date_lte"] = expiration_lte
+            from datetime import datetime, timezone, timedelta
+            today = datetime.now(timezone.utc)
+            gte_date = expiration_gte or (today + timedelta(days=3)).strftime("%Y-%m-%d")
+            lte_date = expiration_lte or (today + timedelta(days=60)).strftime("%Y-%m-%d")
+
+            params: Dict[str, Any] = {
+                "underlying_symbols": symbol,
+                "status": "active",
+                "expiration_date_gte": gte_date,
+                "expiration_date_lte": lte_date,
+                "limit": 200,
+            }
 
             # 1 & 2. Concurrently fetch Option Contracts and Snapshots
             contracts_task = client.get(
                 f"{settings.ALPACA_BASE_URL}/v2/options/contracts",
                 headers=self.headers,
                 params=params,
-                timeout=8.0,
+                timeout=12.0,
             )
             snapshot_task = client.get(
                 f"{settings.ALPACA_DATA_URL}/v1beta1/options/snapshots/{symbol}",
@@ -69,6 +76,20 @@ class AlpacaOptionsService:
             contracts_data = []
             if not isinstance(contracts_res, Exception) and hasattr(contracts_res, "status_code") and contracts_res.status_code == 200:
                 contracts_data = contracts_res.json().get("option_contracts", [])
+
+            # If empty or sparse, fetch broad active expiration window
+            if len(contracts_data) < 10:
+                try:
+                    fallback_resp = await client.get(
+                        f"{settings.ALPACA_BASE_URL}/v2/options/contracts",
+                        headers=self.headers,
+                        params={"underlying_symbols": symbol, "status": "active", "expiration_date_gte": today.strftime("%Y-%m-%d"), "limit": 500},
+                        timeout=10.0,
+                    )
+                    if fallback_resp.status_code == 200:
+                        contracts_data = fallback_resp.json().get("option_contracts", [])
+                except Exception as e:
+                    logger.debug(f"Fallback contract query error: {e}")
 
             snapshots: Dict[str, Any] = {}
             if not isinstance(snap_res, Exception) and hasattr(snap_res, "status_code") and snap_res.status_code == 200:
