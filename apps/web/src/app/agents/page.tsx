@@ -428,11 +428,9 @@ export default function AgentsDashboardPage() {
                   </span>
                 </div>
 
-                <div className="w-full h-1 bg-surface-variant/40 rounded-full overflow-hidden mt-1">
-                  <div
-                    className="h-full bg-primary transition-all duration-500"
-                    style={{ width: `${agent.progressPct}%` }}
-                  />
+                <div className="flex items-center gap-1 text-[10px] font-mono text-outline mt-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'SCANNING' || agent.status === 'ACTIVE' ? 'bg-emerald-400 animate-pulse' : 'bg-outline'}`} />
+                  <span>{agent.status === 'SCANNING' ? 'Executing' : 'Online'}</span>
                 </div>
 
                 <p className="text-[11px] font-mono text-on-surface-variant line-clamp-1">
@@ -482,27 +480,19 @@ export default function AgentsDashboardPage() {
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[11px] font-mono text-emerald-400 font-bold">
-                    {Math.round(agent.confidenceScore * 100)}% CONF
+                  <span className="text-[11px] font-mono text-cyan-400 font-bold">
+                    {agent.status}
                   </span>
                   <div className="text-[10px] font-mono text-outline">
-                    {agent.latencyMs}ms latency
+                    {agent.latencyMs > 0 ? `${agent.latencyMs}ms latency` : 'Active'}
                   </div>
                 </div>
               </div>
 
               <div className="my-3 space-y-2">
-                <div>
-                  <div className="flex items-center justify-between text-[11px] font-mono text-on-surface-variant mb-1">
-                    <span>Task: {agent.currentTask}</span>
-                    <span className="font-bold text-primary">{agent.progressPct}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-surface rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${agent.progressPct}%` }}
-                    />
-                  </div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-on-surface-variant mb-1">
+                  <span className="text-outline">Active Task:</span>
+                  <span className="font-semibold text-primary">{agent.currentTask}</span>
                 </div>
 
                 <div className="bg-surface/80 p-2.5 rounded-sm border border-outline-variant/20 font-mono text-xs">

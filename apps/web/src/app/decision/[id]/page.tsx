@@ -139,17 +139,15 @@ export default function DecisionRoomPage() {
 
           <div className="flex items-center gap-3 bg-surface px-4 py-2 ring-1 ring-outline-variant/30 rounded-sm">
             <span className="font-label-xs text-label-xs text-outline uppercase tracking-widest">
-              {decision.isDegradedMode ? 'Heuristic Score' : 'AI Confidence'}
+              Lognormal POP
             </span>
-            <span className={`font-data-lg text-data-lg font-mono font-bold ${
-              decision.isDegradedMode ? 'text-amber-400' : 'text-primary'
-            }`}>
-              {Math.round(decision.aiConfidence * 100)}%
+            <span className="font-data-lg text-data-lg font-mono font-bold text-primary">
+              {(strategy.pop * 100).toFixed(1)}%
             </span>
             <div className="w-16 h-1.5 bg-surface-variant ml-2 overflow-hidden rounded-full">
               <div
-                className={`h-full ${decision.isDegradedMode ? 'bg-amber-400' : 'bg-primary'}`}
-                style={{ width: `${Math.round(decision.aiConfidence * 100)}%` }}
+                className="h-full bg-primary"
+                style={{ width: `${Math.min(100, Math.round(strategy.pop * 100))}%` }}
               />
             </div>
           </div>

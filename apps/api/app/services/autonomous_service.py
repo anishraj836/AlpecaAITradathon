@@ -255,7 +255,6 @@ class AutonomousAgentService:
         for r, agent in self._agents.items():
             agent.currentSymbol = symbol
             agent.status = "ACTIVE"
-            agent.progressPct = 25
             agent.lastActiveAt = _now_iso()
 
         self._agents["RESEARCHER"].status = "SCANNING"
@@ -278,16 +277,17 @@ class AutonomousAgentService:
                     autonomy_level=self._autonomy_level,
                 )
 
+                pop_score = packet.strategy.pop if packet.strategy else 0.70
+
                 # -------------------------------------------------------------
                 # STAGE 1: Real Researcher Telemetry
                 # -------------------------------------------------------------
                 r = self._agents["RESEARCHER"]
                 r.currentSymbol = symbol
                 r.status = "ACTIVE"
-                r.progressPct = 100
                 r.currentTask = f"Completed market intelligence analysis for {symbol}"
                 r.lastFinding = f"{packet.marketRegime} (Spot ${packet.spotPrice:.2f})"
-                r.confidenceScore = packet.aiConfidence
+                r.confidenceScore = pop_score
                 r.successfulRuns += 1
                 self._append_log(
                     "RESEARCHER",
@@ -305,11 +305,10 @@ class AutonomousAgentService:
                 v = self._agents["VOLATILITY_ANALYST"]
                 v.currentSymbol = symbol
                 v.status = "ACTIVE"
-                v.progressPct = 100
                 v.currentTask = f"Completed Quant MCP surface & skew analysis for {symbol}"
                 skew_desc = "Elevated Put Skew (+5.2σ)" if packet.evidence.putSkewElevated else "Normal Symmetric Curve"
                 v.lastFinding = f"ATM IV {packet.iv30*100:.1f}%, IV Rank {packet.ivRank:.1f}%. Skew: {skew_desc}"
-                v.confidenceScore = packet.aiConfidence
+                v.confidenceScore = pop_score
                 v.successfulRuns += 1
                 self._append_log(
                     "VOLATILITY_ANALYST",
@@ -325,12 +324,11 @@ class AutonomousAgentService:
                 s = self._agents["STRATEGY_SPECIALIST"]
                 s.currentSymbol = symbol
                 s.status = "ACTIVE"
-                s.progressPct = 100
                 s.currentTask = f"Completed delta-neutral synthesis for {symbol}"
 
                 legs_desc = " / ".join([f"{l.side.upper()} ${l.strike:.0f} {l.type.upper()}" for l in packet.strategy.legs])
                 s.lastFinding = f"Synthesized {packet.strategy.name} ({legs_desc}) yielding ${packet.strategy.netCreditOrDebit:.2f} net credit."
-                s.confidenceScore = packet.aiConfidence
+                s.confidenceScore = pop_score
                 s.successfulRuns += 1
                 self._append_log(
                     "STRATEGY_SPECIALIST",
@@ -347,11 +345,10 @@ class AutonomousAgentService:
                 c = self._agents["RISK_CRITIC"]
                 c.currentSymbol = symbol
                 c.status = "ACTIVE"
-                c.progressPct = 100
                 c.currentTask = f"Completed stress testing & margin checks on {symbol}"
                 gate_status = "PASSED" if packet.riskCompilerResult.isApproved else "REJECTED"
                 c.lastFinding = packet.criticAnalysis.details
-                c.confidenceScore = 0.98 if packet.riskCompilerResult.isApproved else 0.50
+                c.confidenceScore = pop_score
                 c.successfulRuns += 1
                 self._append_log(
                     "RISK_CRITIC",
