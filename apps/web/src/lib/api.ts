@@ -17,6 +17,7 @@ import {
   MandatePipelineStep,
   PortfolioSummary,
   PortfolioHistory,
+  AnomalyReport,
 } from '@/types/voltron';
 
 export interface ApiClient {
@@ -30,6 +31,7 @@ export interface ApiClient {
   approveDecision(id: string): Promise<OrderResult>;
   rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }>;
   getVolSurface(underlying?: string): Promise<VolatilitySurface>;
+  getAnomalies(underlying?: string): Promise<AnomalyReport[]>;
   getStrategyCandidates(underlying?: string, targetDelta?: number, budget?: number): Promise<StrategyCandidate[]>;
   getStressReport(strategyId?: string): Promise<StressReport>;
   getAgentTrace(decisionId?: string): Promise<AgentTraceStep[]>;
@@ -116,6 +118,10 @@ class HttpSseApiAdapter implements ApiClient {
 
   async getVolSurface(underlying: string = 'SPY'): Promise<VolatilitySurface> {
     return this.fetchJson<VolatilitySurface>(`/quant/surface?symbol=${underlying}`);
+  }
+
+  async getAnomalies(underlying: string = 'SPY'): Promise<AnomalyReport[]> {
+    return this.fetchJson<AnomalyReport[]>(`/quant/anomalies?symbol=${underlying}`);
   }
 
   async getStrategyCandidates(

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { VolatilitySurface } from '@/types/voltron';
+import { VolatilitySurface, AnomalyReport } from '@/types/voltron';
 import { DEMO_VOL_SURFACE } from '@/fixtures/voltronFixtures';
 import { VolSurface3DCanvas } from '@/components/surface/VolSurface3DCanvas';
 
@@ -18,6 +18,14 @@ export default function VolatilitySurfacePage() {
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
   const [isScanning, setIsScanning] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedAnomaly, setSelectedAnomaly] = useState<AnomalyReport | null>(null);
+  const [scanNotification, setScanNotification] = useState<{
+    timestamp: string;
+    anomaliesFound: number;
+    topAnomaly: string;
+    tradeRecommendation: string;
+    mandateQuery: string;
+  } | null>(null);
 
   const loadSurface = async (symbol: string) => {
     setIsScanning(true);
@@ -26,6 +34,11 @@ export default function VolatilitySurfacePage() {
       const refreshed = await api.getVolSurface(symbol);
       setSurfaceData(refreshed);
       setSelectedSymbol(symbol);
+      if (refreshed.anomalies && refreshed.anomalies.length > 0) {
+        setSelectedAnomaly(refreshed.anomalies[0]);
+      } else {
+        setSelectedAnomaly(null);
+      }
     } catch (err: any) {
       console.warn('Failed to load surface:', err);
       const msg = err?.message || `Ticker '${symbol}' not found on US exchanges or Alpaca Paper Broker.`;
@@ -40,7 +53,46 @@ export default function VolatilitySurfacePage() {
   }, [selectedSymbol]);
 
   const handleRunScan = async () => {
-    await loadSurface(selectedSymbol);
+    setIsScanning(true);
+    setErrorMessage(null);
+    setScanNotification(null);
+    try {
+      const refreshed = await api.getVolSurface(selectedSymbol);
+      setSurfaceData(refreshed);
+
+      const anomCount = refreshed.anomalies.length;
+      const top = refreshed.anomalies[0];
+      let tradeRec = `Harvest volatility premium on ${selectedSymbol} via market-neutral credit spread`;
+      let mandateQuery = `Sell market-neutral volatility credit spread on ${selectedSymbol}`;
+
+      if (top) {
+        if (top.category === 'SKEW') {
+          tradeRec = `High Put Skew Dislocation (${top.metricLabel}): Harvest elevated downside wing premium via 15Δ Iron Condor on ${selectedSymbol}`;
+          mandateQuery = `Harvest rich put skew on ${selectedSymbol} with defined-risk Iron Condor`;
+        } else if (top.category === 'TERM') {
+          tradeRec = `Term Structure Inversion (${top.metricLabel}): Exploit near-term event risk premium via Calendar/Diagonal spread on ${selectedSymbol}`;
+          mandateQuery = `Exploit term structure premium on ${selectedSymbol}`;
+        } else if (top.category === 'VOL_SPIKE') {
+          tradeRec = `IV/RV Premium Expansion (${top.metricLabel}): Exploit wide volatility spread above 20D realized vol via credit spread`;
+          mandateQuery = `Capture IV over RV premium expansion on ${selectedSymbol}`;
+        }
+        setSelectedAnomaly(top);
+      }
+
+      setScanNotification({
+        timestamp: new Date().toLocaleTimeString(),
+        anomaliesFound: anomCount,
+        topAnomaly: top ? `${top.name} (${top.metricLabel})` : 'Normal Market Regime',
+        tradeRecommendation: tradeRec,
+        mandateQuery,
+      });
+    } catch (err: any) {
+      console.warn('Failed to run anomaly scan:', err);
+      const msg = err?.message || `Failed to scan ${selectedSymbol} for market anomalies.`;
+      setErrorMessage(msg);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   return (
@@ -408,38 +460,107 @@ export default function VolatilitySurfacePage() {
             type="button"
             onClick={handleRunScan}
             disabled={isScanning}
-            className="font-label-xs text-label-xs text-primary hover:text-primary-fixed-dim uppercase tracking-wider flex items-center gap-1 disabled:opacity-50"
+            className="px-3.5 py-1.5 bg-primary/10 border border-primary/40 text-primary hover:bg-primary/20 font-mono text-xs font-bold uppercase tracking-wider rounded-sm flex items-center gap-1.5 disabled:opacity-50 transition-all shadow-xs cursor-pointer"
           >
-            {isScanning ? 'Scanning...' : 'Run Scan'}{' '}
-            <span className="material-symbols-outlined text-[14px]">play_arrow</span>
+            <span className={`material-symbols-outlined text-[16px] ${isScanning ? 'animate-spin' : ''}`}>
+              {isScanning ? 'sync' : 'radar'}
+            </span>
+            <span>{isScanning ? 'Scanning Quant MCP...' : 'Run Anomaly Scan'}</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-container-gap">
+        {/* Scan In-Progress Radar Banner */}
+        {isScanning && (
+          <div className="mb-4 bg-primary/10 border border-primary/30 p-3 rounded-sm flex items-center gap-3 animate-pulse font-mono">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-primary uppercase">
+                QUANT MCP ANOMALY SCAN IN PROGRESS FOR {selectedSymbol}...
+              </span>
+              <span className="text-[11px] text-on-surface-variant">
+                Scanning option chain across 7 statistical dislocation models: Put/Call Skew (Z-Score), Term Structure Backwardation, IV/RV Premium Spread, Smile Curvature &amp; Liquidity Depth.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Scan Complete Notification Banner with Direct Trade Recommendation */}
+        {scanNotification && !isScanning && (
+          <div className="mb-4 bg-surface-container-high border-2 border-primary/50 p-4 rounded-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md animate-fade-in font-mono">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-primary/20 rounded border border-primary/40 text-primary mt-0.5">
+                <span className="material-symbols-outlined text-[20px]">check_circle</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-primary uppercase">
+                    MCP SCAN COMPLETE ({scanNotification.timestamp})
+                  </span>
+                  <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded font-bold">
+                    {scanNotification.anomaliesFound} ANOMALIES DETECTED
+                  </span>
+                </div>
+                <p className="text-xs text-on-surface mt-1">
+                  <strong className="text-primary-fixed-dim">Trade Recommendation:</strong> {scanNotification.tradeRecommendation}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+              <Link
+                href={`/terminal?mandate=${encodeURIComponent(scanNotification.mandateQuery)}`}
+                className="px-3.5 py-1.5 bg-primary text-on-primary hover:bg-primary-fixed-dim font-mono text-xs font-bold rounded-sm flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <span>Deploy in Terminal</span>
+                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setScanNotification(null)}
+                className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 3-Column Anomaly Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-container-gap">
           {surfaceData.anomalies.map((anom) => {
             const isError = anom.category === 'SKEW';
             const isWarn = anom.category === 'TERM';
             const isLiq = anom.category === 'LIQUIDITY';
+            const isSelected = selectedAnomaly?.id === anom.id;
 
             return (
               <div
                 key={anom.id}
-                className={`bg-surface p-4 rounded-sm border border-outline-variant/20 flex flex-col gap-2 transition-colors cursor-pointer ${
-                  isError
-                    ? 'hover:border-error/50'
+                onClick={() => setSelectedAnomaly(isSelected ? null : anom)}
+                className={`bg-surface p-4 rounded-sm border transition-all cursor-pointer select-none ${
+                  isSelected
+                    ? 'border-primary ring-2 ring-primary/50 bg-primary/5 shadow-md'
+                    : isError
+                    ? 'border-outline-variant/20 hover:border-error/60 hover:bg-surface-variant/20'
                     : isWarn
-                    ? 'hover:border-tertiary-fixed-dim/50'
-                    : 'hover:border-primary/50'
+                    ? 'border-outline-variant/20 hover:border-tertiary-fixed-dim/60 hover:bg-surface-variant/20'
+                    : 'border-outline-variant/20 hover:border-primary/60 hover:bg-surface-variant/20'
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <span
-                    className={`font-data-md text-data-md font-semibold font-mono ${
-                      isError ? 'text-error' : isWarn ? 'text-tertiary-fixed-dim' : 'text-on-surface'
-                    }`}
-                  >
-                    {anom.name}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isSelected && (
+                      <span className="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+                    )}
+                    <span
+                      className={`font-data-md text-data-md font-semibold font-mono ${
+                        isError ? 'text-error' : isWarn ? 'text-tertiary-fixed-dim' : 'text-on-surface'
+                      }`}
+                    >
+                      {anom.name}
+                    </span>
+                  </div>
                   <span
                     className={`px-1.5 py-0.5 font-label-xs text-label-xs rounded-sm border font-mono ${
                       isError
@@ -452,24 +573,82 @@ export default function VolatilitySurfacePage() {
                     {anom.metricLabel}
                   </span>
                 </div>
-                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
                   {anom.description}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 h-0.5 bg-surface-variant">
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex-1 h-1 bg-surface-variant rounded-full overflow-hidden">
                     <div
                       className={`h-full ${isError ? 'bg-error' : isWarn ? 'bg-tertiary-fixed-dim' : 'bg-primary'}`}
                       style={{ width: `${anom.percentile}%` }}
                     />
                   </div>
                   <span className="font-label-xs text-label-xs text-on-surface-variant font-mono">
-                    {anom.confidence} CONF
+                    {anom.confidence} CONF ({anom.percentile}th %ile)
                   </span>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Anomaly Strategy Dispatch Inspector */}
+        {selectedAnomaly && (
+          <div className="mt-4 bg-surface p-4 rounded-sm border-2 border-primary/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-mono shadow-md animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded bg-primary/10 border border-primary/30 text-primary shrink-0">
+                <span className="material-symbols-outlined text-[22px]">psychology</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-on-surface uppercase">
+                    ACTIVE ANOMALY INSPECTOR: {selectedAnomaly.name}
+                  </span>
+                  <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded font-bold">
+                    {selectedAnomaly.metricLabel}
+                  </span>
+                  <span className="text-[10px] text-outline">
+                    ({selectedAnomaly.percentile}th Percentile Dislocation)
+                  </span>
+                </div>
+                <p className="text-xs text-on-surface-variant max-w-3xl">
+                  {selectedAnomaly.description}
+                </p>
+                <div className="flex items-center gap-2 mt-1 text-[11px] text-primary-fixed-dim">
+                  <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                  <span>
+                    Optimal Exploit: Defined-risk multi-leg options structure parameterized against live surface Greeks.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              <Link
+                href={`/terminal?mandate=${encodeURIComponent(`Harvest ${selectedAnomaly.name} on ${selectedSymbol}`)}`}
+                className="px-3.5 py-1.5 bg-primary text-on-primary hover:bg-primary-fixed-dim text-xs font-bold rounded-sm flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <span>Deploy in Terminal</span>
+                <span className="material-symbols-outlined text-[14px]">bolt</span>
+              </Link>
+              <Link
+                href="/stress"
+                className="px-3 py-1.5 bg-surface-container-high border border-outline-variant/30 text-on-surface hover:bg-surface-variant text-xs font-bold rounded-sm flex items-center gap-1.5 transition-colors"
+              >
+                <span>Stress Lab</span>
+                <span className="material-symbols-outlined text-[14px]">troubleshoot</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setSelectedAnomaly(null)}
+                className="p-1.5 text-outline hover:text-on-surface transition-colors cursor-pointer"
+                title="Close"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

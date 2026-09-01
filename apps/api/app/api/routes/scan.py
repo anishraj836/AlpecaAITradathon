@@ -13,6 +13,7 @@ from app.domain.models import (
     AgentTraceStep,
     MandateRequest,
     DecisionPacket,
+    AnomalyReport,
 )
 
 router = APIRouter(prefix="/quant", tags=["Quantitative Analysis"])
@@ -70,6 +71,34 @@ async def get_volatility_surface(
 
     try:
         return await quant_gw.get_surface(symbol=symbol, spot=spot, chain=raw_contracts)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/anomalies", response_model=List[AnomalyReport])
+async def get_market_anomalies(
+    symbol: str = "SPY",
+    quant_gw = Depends(get_quant_gateway),
+    broker_gw = Depends(get_broker_gateway),
+):
+    symbol = symbol.strip().upper()
+    try:
+        ctx = await broker_gw.get_market_context(symbol)
+        spot = ctx.price
+    except Exception:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ticker '{symbol}' not found on US exchanges or Alpaca Paper Broker. Please enter a valid symbol (e.g. SPY, PLTR, NVDA, TSLA, AAPL, QQQ)."
+        )
+
+    try:
+        chain = await broker_gw.get_option_chain(symbol)
+        raw_contracts = [leg.model_dump() for leg in chain] if chain else None
+    except Exception:
+        raw_contracts = None
+
+    try:
+        surface = await quant_gw.get_surface(symbol=symbol, spot=spot, chain=raw_contracts)
+        return surface.anomalies
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
