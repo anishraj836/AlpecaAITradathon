@@ -81,11 +81,20 @@ async def run_mandate_scan(
     orchestrator = VoltronOrchestrator(broker_gw, quant_gw, session)
     try:
         target_symbol = extract_symbol_from_mandate(req.mandate, req.underlying)
+        try:
+            await broker_gw.get_market_context(target_symbol)
+        except Exception:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ticker '{target_symbol}' not found on US exchanges or Alpaca Paper Broker. Please provide a valid ticker (e.g. SPY, PLTR, NVDA, TSLA, AAPL, QQQ)."
+            )
         return await orchestrator.execute_mandate(
             mandate=req.mandate,
             symbol=target_symbol,
             autonomy_level=req.autonomyLevel,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

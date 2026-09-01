@@ -17,14 +17,19 @@ export default function VolatilitySurfacePage() {
   const [surfaceData, setSurfaceData] = useState<VolatilitySurface>(DEMO_VOL_SURFACE);
   const [viewMode, setViewMode] = useState<SurfaceViewMode>('3D');
   const [isScanning, setIsScanning] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadSurface = async (symbol: string) => {
     setIsScanning(true);
+    setErrorMessage(null);
     try {
       const refreshed = await api.getVolSurface(symbol);
       setSurfaceData(refreshed);
-    } catch (err) {
+      setSelectedSymbol(symbol);
+    } catch (err: any) {
       console.warn('Failed to load surface:', err);
+      const msg = err?.message || `Ticker '${symbol}' not found on US exchanges or Alpaca Paper Broker.`;
+      setErrorMessage(msg);
     } finally {
       setIsScanning(false);
     }
@@ -40,6 +45,23 @@ export default function VolatilitySurfacePage() {
 
   return (
     <div className="flex flex-col w-full h-full gap-container-gap pb-container-gap">
+      {/* Error Notification Banner */}
+      {errorMessage && (
+        <div className="bg-error/15 border-2 border-error/50 text-error px-4 py-3 rounded-sm flex items-center justify-between font-mono text-xs shadow-lg animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-error text-[20px]">error</span>
+            <span className="font-bold">{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="hover:text-on-surface transition-colors p-1"
+          >
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Workspace Grid (Surface + Sidebars) */}
       <div className="flex gap-container-gap h-[640px]">
         {/* Volatility Surface (Main Viewport) */}
@@ -54,11 +76,11 @@ export default function VolatilitySurfacePage() {
               
               {/* Custom Ticker Input Form */}
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   if (customTickerInput.trim()) {
                     const sym = customTickerInput.trim().toUpperCase();
-                    setSelectedSymbol(sym);
+                    await loadSurface(sym);
                     setCustomTickerInput('');
                   }
                 }}

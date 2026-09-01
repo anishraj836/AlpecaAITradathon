@@ -66,7 +66,14 @@ class HttpSseApiAdapter implements ApiClient {
     });
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(`API Request to ${path} failed (${res.status}): ${errorText}`);
+      let msg = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed.detail) {
+          msg = parsed.detail;
+        }
+      } catch {}
+      throw new Error(msg);
     }
     return res.json();
   }

@@ -67,13 +67,11 @@ TICKER_DEFAULT_SPOTS: Dict[str, float] = {
     "BA": 162.00,
 }
 
-def get_spot_for_ticker(symbol: str) -> float:
+def get_spot_for_ticker(symbol: str) -> Optional[float]:
     sym = symbol.upper()
     if sym in TICKER_DEFAULT_SPOTS:
         return TICKER_DEFAULT_SPOTS[sym]
-    # Deterministic spot price generation for ANY arbitrary custom ticker
-    hash_val = sum(ord(c) for c in sym)
-    return round(50.0 + (hash_val % 350) + 0.50, 2)
+    return None
 
 def handle_get_surface(
     symbol: str,
@@ -82,6 +80,8 @@ def handle_get_surface(
 ) -> Dict[str, Any]:
     """Compute implied volatility surface, term structure, and skew snapshot."""
     actual_spot = spot if (spot is not None and spot > 0) else get_spot_for_ticker(symbol)
+    if actual_spot is None or actual_spot <= 0:
+        raise ValueError(f"Ticker '{symbol}' not found on US exchanges. Please enter a valid symbol (e.g. SPY, PLTR, NVDA, TSLA, AAPL).")
     surface = build_volatility_surface(
         underlying=symbol,
         spot_price=actual_spot,

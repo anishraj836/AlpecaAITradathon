@@ -177,8 +177,7 @@ class MockOptionsIntelligenceGateway(OptionsIntelligenceGateway):
         elif sym in spot_table:
             actual_spot = spot_table[sym]
         else:
-            hash_val = sum(ord(c) for c in sym)
-            actual_spot = round(50.0 + (hash_val % 350) + 0.5, 2)
+            raise ValueError(f"Ticker '{symbol}' not found on US exchanges. Please enter a valid symbol (e.g. SPY, PLTR, NVDA, TSLA, AAPL).")
         try:
             from surface import build_volatility_surface
             raw_surface = build_volatility_surface(

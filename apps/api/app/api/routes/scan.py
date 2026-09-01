@@ -52,13 +52,15 @@ async def get_volatility_surface(
     quant_gw = Depends(get_quant_gateway),
     broker_gw = Depends(get_broker_gateway),
 ):
-    symbol = symbol.upper()
-    spot = None
+    symbol = symbol.strip().upper()
     try:
         ctx = await broker_gw.get_market_context(symbol)
         spot = ctx.price
     except Exception:
-        spot = None
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ticker '{symbol}' not found on US exchanges or Alpaca Paper Broker. Please enter a valid symbol (e.g. SPY, PLTR, NVDA, TSLA, AAPL, QQQ)."
+        )
 
     try:
         chain = await broker_gw.get_option_chain(symbol)
@@ -66,7 +68,10 @@ async def get_volatility_surface(
     except Exception:
         raw_contracts = None
 
-    return await quant_gw.get_surface(symbol=symbol, spot=spot, chain=raw_contracts)
+    try:
+        return await quant_gw.get_surface(symbol=symbol, spot=spot, chain=raw_contracts)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/stress", response_model=StressReport)
 async def get_stress_report(

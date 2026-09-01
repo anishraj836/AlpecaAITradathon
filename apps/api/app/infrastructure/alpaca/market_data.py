@@ -19,25 +19,37 @@ class AlpacaMarketDataService:
         }
 
     async def get_market_context(self, symbol: str) -> MarketContext:
-        symbol = symbol.upper()
+        symbol = symbol.strip().upper()
         now_ts = time.time()
         if symbol in _MARKET_CONTEXT_CACHE:
             ts, cached_ctx = _MARKET_CONTEXT_CACHE[symbol]
             if now_ts - ts < CACHE_TTL_SECONDS:
                 return cached_ctx
+
+        known_defaults = {
+            "SPY": 645.31, "QQQ": 510.00, "IWM": 224.50, "NVDA": 138.50,
+            "AAPL": 228.40, "TSLA": 215.10, "MSFT": 425.00, "AMZN": 186.00,
+            "META": 528.00, "GOOGL": 168.00, "AMD": 154.00, "PLTR": 34.50,
+            "COIN": 212.00, "SMCI": 448.00, "ARM": 134.00, "GLD": 230.00,
+            "DIS": 96.00, "NFLX": 685.00, "AVGO": 162.00, "UBER": 76.50,
+            "BABA": 88.00, "BA": 162.00,
+        }
+
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
-            # Deterministic live benchmark fallback
+            # Deterministic test mode: only return context for known valid symbols
+            if symbol not in known_defaults:
+                raise ValueError(f"Ticker '{symbol}' not found on US exchanges.")
             return AlpacaNormalizer.normalize_market_context(
                 symbol=symbol,
-                price=645.31 if symbol == "SPY" else 500.25,
+                price=known_defaults[symbol],
                 change_pct=0.82 if symbol == "SPY" else 0.45,
-                high=647.20,
-                low=642.10,
+                high=known_defaults[symbol] * 1.01,
+                low=known_defaults[symbol] * 0.99,
                 volume=82500000,
             )
 
         async with httpx.AsyncClient() as client:
-            # Fetch latest trade / snapshot
+            # 1. Fetch latest trade / snapshot from Alpaca Data API
             resp = await client.get(
                 f"{settings.ALPACA_DATA_URL}/v2/stocks/{symbol}/snapshot",
                 headers=self.headers,
@@ -49,7 +61,9 @@ class AlpacaMarketDataService:
                 daily_bar = data.get("dailyBar", {})
                 prev_daily_bar = data.get("prevDailyBar", {})
 
-                price = float(latest_trade.get("p", daily_bar.get("c", 645.31)))
+                price = float(latest_trade.get("p", daily_bar.get("c", 0.0)))
+                if price <= 0:
+                    raise ValueError(f"No pricing data available for ticker '{symbol}'.")
                 prev_close = float(prev_daily_bar.get("c", price))
                 change_pct = ((price - prev_close) / prev_close * 100.0) if prev_close else 0.0
 
@@ -63,10 +77,27 @@ class AlpacaMarketDataService:
                 )
                 _MARKET_CONTEXT_CACHE[symbol] = (now_ts, ctx)
                 return ctx
+            elif resp.status_code in (404, 400, 422):
+                # Verify with asset endpoint to confirm whether symbol is a valid US equity
+                try:
+                    asset_resp = await client.get(
+                        f"{settings.ALPACA_BASE_URL}/v2/assets/{symbol}",
+                        headers=self.headers,
+                        timeout=5.0,
+                    )
+                    if asset_resp.status_code != 200:
+                        raise ValueError(f"Ticker '{symbol}' not found on US exchanges or Alpaca Paper Broker.")
+                    asset_data = asset_resp.json()
+                    if not asset_data.get("tradable", False):
+                        raise ValueError(f"Ticker '{symbol}' is not currently tradable.")
+                    price = known_defaults.get(symbol, 100.0)
+                    ctx = AlpacaNormalizer.normalize_market_context(symbol=symbol, price=price, change_pct=0.0)
+                    _MARKET_CONTEXT_CACHE[symbol] = (now_ts, ctx)
+                    return ctx
+                except Exception:
+                    raise ValueError(f"Ticker '{symbol}' not found on US exchanges or Alpaca Paper Broker.")
             else:
-                ctx = AlpacaNormalizer.normalize_market_context(symbol=symbol, price=645.31, change_pct=0.82)
-                _MARKET_CONTEXT_CACHE[symbol] = (now_ts, ctx)
-                return ctx
+                raise ValueError(f"Failed to query market data for ticker '{symbol}' (status {resp.status_code}).")
 
     async def get_clock(self) -> Dict[str, Any]:
         """
