@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -16,6 +17,15 @@ class Settings(BaseSettings):
     ALPACA_PAPER: bool = True
     ALPACA_BASE_URL: str = "https://paper-api.alpaca.markets"
     ALPACA_DATA_URL: str = "https://data.alpaca.markets"
+
+    @field_validator("ALPACA_BASE_URL", mode="after")
+    @classmethod
+    def clean_alpaca_base_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.rstrip("/")
+            if v.endswith("/v2"):
+                v = v[:-3]
+        return v
     
     # Database
     DATABASE_URL: str = f"sqlite+aiosqlite:///{_DB_PATH}"
