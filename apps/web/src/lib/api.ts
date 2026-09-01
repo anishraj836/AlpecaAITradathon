@@ -190,10 +190,12 @@ class HttpSseApiAdapter implements ApiClient {
                 DATA_FETCH: 'step-1',
                 RESEARCH: 'step-1',
                 VOLATILITY: 'step-2',
+                QUANT_GEN: 'step-3',
                 STRATEGY: 'step-3',
                 CRITIC: 'step-4',
                 RISK: 'step-5',
                 EXECUTION: 'step-6',
+                DECISION: 'step-6',
                 COMPLETE: 'step-6',
               };
               const stepId = stepMap[parsed.stage] || 'step-1';

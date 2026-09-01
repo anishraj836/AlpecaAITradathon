@@ -61,7 +61,7 @@ class EventBroadcaster:
             while True:
                 event: OrchestratorEvent = await queue.get()
                 data_json = json.dumps(event.model_dump())
-                yield f"event: {event.eventType}\ndata: {data_json}\n\n"
+                yield f"data: {data_json}\n\n"
         finally:
             async with self._lock:
                 if subscription_entry in self._subscribers:

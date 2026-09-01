@@ -135,10 +135,38 @@ export default function CommandTerminalPage() {
     }));
 
     try {
-      // Dispatch mandate to FastAPI orchestrator
+      // Dispatch mandate to FastAPI orchestrator with real-time SSE progress streaming
       const result = await api.dispatchMandate(
         targetMandate,
-        undefined,
+        (progressStep) => {
+          setOperationState((prev) => {
+            const stepOrder = ['step-1', 'step-2', 'step-3', 'step-4', 'step-5', 'step-6'];
+            const currIdx = stepOrder.indexOf(progressStep.id);
+            const nextStepId = currIdx >= 0 && currIdx < stepOrder.length - 1 ? stepOrder[currIdx + 1] : null;
+
+            const updatedSteps = prev.steps.map((s) => {
+              if (s.id === progressStep.id) {
+                return {
+                  ...s,
+                  status: progressStep.status,
+                  title: progressStep.title || s.title,
+                  outputSummary: progressStep.outputSummary || s.outputSummary,
+                };
+              }
+              if (progressStep.status === 'COMPLETE' && s.id === nextStepId && s.status === 'PENDING') {
+                return {
+                  ...s,
+                  status: 'ACTIVE' as const,
+                };
+              }
+              return s;
+            });
+            return {
+              ...prev,
+              steps: updatedSteps,
+            };
+          });
+        },
         effectiveAutonomy
       );
 

@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Optional, List, Any
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,14 +115,23 @@ class VoltronOrchestrator:
                 message=f"Mandate initialized for {symbol}: '{mandate}'",
             )
 
-            # Stage 1: Market & Account Data (Single Fetch)
-            account = await self.broker.get_account()
-            market_context = await self.broker.get_market_context(symbol)
-            try:
-                news_items = await self.broker.get_news(symbol, limit=5)
-                market_context.news = news_items
-            except Exception:
-                pass
+            # Stage 1: Concurrent High-Speed Data Fetch (Account, Market Quotes, News & Option Chain in Parallel)
+            fetch_results = await asyncio.gather(
+                self.broker.get_account(),
+                self.broker.get_market_context(symbol),
+                self.broker.get_news(symbol, limit=5),
+                self.broker.get_option_chain(symbol),
+                return_exceptions=True,
+            )
+
+            # Unpack results with safe fallbacks
+            account = fetch_results[0] if not isinstance(fetch_results[0], Exception) else await self.broker.get_account()
+            market_context = fetch_results[1] if not isinstance(fetch_results[1], Exception) else await self.broker.get_market_context(symbol)
+            news_items = fetch_results[2] if not isinstance(fetch_results[2], Exception) else []
+            market_context.news = news_items
+
+            chain_legs = fetch_results[3] if not isinstance(fetch_results[3], Exception) else []
+            chain_dicts = [l.model_dump() for l in chain_legs] if chain_legs else None
 
             await self._emit_event(
                 decision_id=decision_id,
@@ -132,12 +142,19 @@ class VoltronOrchestrator:
                 payload={"spotPrice": market_context.price, "equity": account.equity, "newsCount": len(market_context.news or [])},
             )
 
-            # Stage 2: Retrieve Live Option Chain & Volatility Surface (Quant MCP)
-            chain_legs = await self.broker.get_option_chain(symbol)
-            chain_dicts = [l.model_dump() for l in chain_legs] if chain_legs else None
+            # Stage 2 & 3: Concurrent Volatility Surface & Candidate Generation
+            surface_task = self.quant.get_surface(symbol, spot=market_context.price, chain=chain_dicts)
+            candidates_task = self.quant.generate_candidates(
+                symbol=symbol,
+                target_delta=target_delta,
+                max_budget=budget,
+                spot=market_context.price,
+                chain=chain_dicts,
+            )
 
-            surface = await self.quant.get_surface(symbol, spot=market_context.price, chain=chain_dicts)
+            surface, candidates = await asyncio.gather(surface_task, candidates_task)
             anomalies = surface.anomalies if surface.anomalies else await self.quant.detect_anomalies(symbol, spot=market_context.price)
+
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="surface_completed",
@@ -146,16 +163,9 @@ class VoltronOrchestrator:
                 message=f"Retrieved {symbol} live option chain ({len(chain_legs)} contracts) and surface",
             )
 
-            # Stage 3: Candidate Generation (Quant MCP with live spot and chain)
-            candidates = await self.quant.generate_candidates(
-                symbol=symbol,
-                target_delta=target_delta,
-                max_budget=budget,
-                spot=market_context.price,
-                chain=chain_dicts,
-            )
             if not candidates:
                 raise ValueError(f"No candidate options strategies returned by Quant engine for {symbol}.")
+
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="candidate_generation_completed",
