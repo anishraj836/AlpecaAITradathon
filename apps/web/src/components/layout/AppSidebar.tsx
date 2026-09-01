@@ -15,6 +15,7 @@ interface NavItem {
 
 const MAIN_TERMINAL_ITEMS: NavItem[] = [
   { label: 'Command Center', href: '/terminal', icon: 'terminal', exact: true },
+  { label: 'Autonomous Agents', href: '/agents', icon: 'smart_toy' },
   { label: 'Live Portfolio', href: '/portfolio', icon: 'account_balance_wallet' },
   { label: 'Volatility Surface', href: '/surface', icon: 'monitoring' },
   { label: 'Opportunity Scanner', href: '/tournament', icon: 'radar' },

@@ -18,6 +18,10 @@ import {
   PortfolioSummary,
   PortfolioHistory,
   AnomalyReport,
+  AgentsDashboardResponse,
+  AgentLogEntry,
+  AutonomousDaemonState,
+  AutonomousControlRequest,
 } from '@/types/voltron';
 
 export interface ApiClient {
@@ -32,6 +36,9 @@ export interface ApiClient {
   rejectDecision(id: string): Promise<{ success: boolean; decisionId: string }>;
   getVolSurface(underlying?: string): Promise<VolatilitySurface>;
   getAnomalies(underlying?: string): Promise<AnomalyReport[]>;
+  getAgentsStatus(): Promise<AgentsDashboardResponse>;
+  getAgentLogs(role?: string, level?: string, limit?: number): Promise<AgentLogEntry[]>;
+  controlAutonomousDaemon(req: AutonomousControlRequest): Promise<AutonomousDaemonState>;
   getStrategyCandidates(underlying?: string, targetDelta?: number, budget?: number): Promise<StrategyCandidate[]>;
   getStressReport(strategyId?: string): Promise<StressReport>;
   getAgentTrace(decisionId?: string): Promise<AgentTraceStep[]>;
@@ -122,6 +129,25 @@ class HttpSseApiAdapter implements ApiClient {
 
   async getAnomalies(underlying: string = 'SPY'): Promise<AnomalyReport[]> {
     return this.fetchJson<AnomalyReport[]>(`/quant/anomalies?symbol=${underlying}`);
+  }
+
+  async getAgentsStatus(): Promise<AgentsDashboardResponse> {
+    return this.fetchJson<AgentsDashboardResponse>('/agents/status');
+  }
+
+  async getAgentLogs(role?: string, level?: string, limit: number = 100): Promise<AgentLogEntry[]> {
+    const params = new URLSearchParams();
+    if (role) params.set('role', role);
+    if (level) params.set('level', level);
+    params.set('limit', String(limit));
+    return this.fetchJson<AgentLogEntry[]>(`/agents/logs?${params.toString()}`);
+  }
+
+  async controlAutonomousDaemon(req: AutonomousControlRequest): Promise<AutonomousDaemonState> {
+    return this.fetchJson<AutonomousDaemonState>('/agents/control', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
   }
 
   async getStrategyCandidates(

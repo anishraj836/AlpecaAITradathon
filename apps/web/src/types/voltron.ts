@@ -398,3 +398,60 @@ export interface PortfolioHistory {
   base_value: number;
   timeframe: string;
 }
+
+export interface AgentFleetStatus {
+  id: string;
+  role: 'RESEARCHER' | 'VOLATILITY_ANALYST' | 'STRATEGY_SPECIALIST' | 'RISK_CRITIC' | 'AUTONOMOUS_DAEMON';
+  name: string;
+  description: string;
+  status: 'IDLE' | 'SCANNING' | 'ANALYZING' | 'SYNTHESIZING' | 'STRESS_TESTING' | 'ACTIVE' | 'PAUSED';
+  currentSymbol?: string;
+  currentTask: string;
+  progressPct: number;
+  latencyMs: number;
+  model: string;
+  lastActiveAt: string;
+  successfulRuns: number;
+  errorCount: number;
+  confidenceScore: number;
+  lastFinding: string;
+}
+
+export interface AgentLogEntry {
+  id: string;
+  timestamp: string;
+  agentRole: string;
+  agentName: string;
+  level: 'INFO' | 'THINKING' | 'WARNING' | 'ERROR' | 'SUCCESS' | 'DISPATCH';
+  symbol?: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface AutonomousDaemonState {
+  isRunning: boolean;
+  isPaused: boolean;
+  autonomyLevel: AutonomyLevel;
+  marketStatus: string;
+  watchlist: string[];
+  currentCycleSeconds: number;
+  cycleIntervalSeconds: number;
+  totalCyclesCompleted: number;
+  totalOrdersExecuted: number;
+  totalDislocationsFound: number;
+  lastScanAt?: string;
+  nextScanAt?: string;
+}
+
+export interface AutonomousControlRequest {
+  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST';
+  autonomyLevel?: AutonomyLevel;
+  watchlist?: string[];
+  symbol?: string;
+}
+
+export interface AgentsDashboardResponse {
+  agents: AgentFleetStatus[];
+  daemon: AutonomousDaemonState;
+  recentLogs: AgentLogEntry[];
+}

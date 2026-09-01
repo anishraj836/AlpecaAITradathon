@@ -447,3 +447,59 @@ class OrchestratorEvent(BaseModel):
     message: str
     timestamp: str
     payload: Optional[Dict[str, Any]] = None
+
+# ==========================================
+# Autonomous Agents Fleet & Dashboard Models
+# ==========================================
+
+class AgentFleetStatus(BaseModel):
+    id: str
+    role: str
+    name: str
+    description: str
+    status: Literal['IDLE', 'SCANNING', 'ANALYZING', 'SYNTHESIZING', 'STRESS_TESTING', 'ACTIVE', 'PAUSED']
+    currentSymbol: Optional[str] = None
+    currentTask: str
+    progressPct: int = 0
+    latencyMs: int = 150
+    model: str = "Gemini 1.5 Pro / Quant MCP"
+    lastActiveAt: str
+    successfulRuns: int = 0
+    errorCount: int = 0
+    confidenceScore: float = 0.92
+    lastFinding: str
+
+class AgentLogEntry(BaseModel):
+    id: str
+    timestamp: str
+    agentRole: str
+    agentName: str
+    level: Literal['INFO', 'THINKING', 'WARNING', 'ERROR', 'SUCCESS', 'DISPATCH']
+    symbol: Optional[str] = None
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+class AutonomousDaemonState(BaseModel):
+    isRunning: bool
+    isPaused: bool
+    autonomyLevel: AutonomyLevel
+    marketStatus: str
+    watchlist: List[str]
+    currentCycleSeconds: int
+    cycleIntervalSeconds: int
+    totalCyclesCompleted: int
+    totalOrdersExecuted: int
+    totalDislocationsFound: int
+    lastScanAt: Optional[str] = None
+    nextScanAt: Optional[str] = None
+
+class AutonomousControlRequest(BaseModel):
+    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST']
+    autonomyLevel: Optional[AutonomyLevel] = None
+    watchlist: Optional[List[str]] = None
+    symbol: Optional[str] = None
+
+class AgentsDashboardResponse(BaseModel):
+    agents: List[AgentFleetStatus]
+    daemon: AutonomousDaemonState
+    recentLogs: List[AgentLogEntry]

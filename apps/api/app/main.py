@@ -9,15 +9,20 @@ from app.infrastructure.database.session import init_db, get_db_session
 from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.agents.orchestrator import VoltronOrchestrator
 from app.domain.models import MandateRequest, DecisionPacket
-from app.api.routes import health, telemetry, decisions, scan, orders, events, replay, history, portfolio
+from app.api.routes import health, telemetry, decisions, scan, orders, events, replay, history, portfolio, agents
 from app.api.routes import settings as settings_route
+import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize Database Tables
     await init_db()
+    # Start Autonomous Agent Fleet Service background daemon
+    from app.services.autonomous_service import autonomous_agent_service
+    bg_task = asyncio.create_task(autonomous_agent_service.run_background_loop())
     yield
     # Shutdown
+    bg_task.cancel()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -108,6 +113,7 @@ app.include_router(events.router, prefix=settings.API_PREFIX)
 app.include_router(replay.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(portfolio.router, prefix=settings.API_PREFIX)
+app.include_router(agents.router, prefix=settings.API_PREFIX)
 app.include_router(settings_route.router)
 
 @app.get("/")
