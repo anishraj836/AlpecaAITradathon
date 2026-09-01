@@ -24,8 +24,8 @@ export default function PayoffStressLabPage() {
   // Dynamic spot price resolver for ANY custom ticker
   const getSpot = (sym: string): number => {
     const table: Record<string, number> = {
-      SPY: 769.28,
-      QQQ: 645.31,
+      SPY: 645.31,
+      QQQ: 510.00,
       NVDA: 138.50,
       AAPL: 228.40,
       TSLA: 215.10,

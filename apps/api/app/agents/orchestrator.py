@@ -174,7 +174,7 @@ class VoltronOrchestrator:
                 message=f"Generated {len(candidates)} candidate structures dynamically",
             )
 
-            # Stage 4: Run Researcher Agent
+            # Stage 4 & 5: Concurrently Run Researcher Agent and Volatility Analyst Agent
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="researcher_started",
@@ -182,13 +182,31 @@ class VoltronOrchestrator:
                 status="ACTIVE",
                 message="Market Researcher evaluating price regime and intraday dispersion...",
             )
-            research_out, trace_1 = await self.researcher.run(
+            await self._emit_event(
+                decision_id=decision_id,
+                event_type="volatility_started",
+                stage="VOLATILITY",
+                status="ACTIVE",
+                message="Volatility Analyst interpreting skew and term structure...",
+            )
+
+            research_task = self.researcher.run(
                 input_data=market_context,
                 decision_id=decision_id,
                 step_id="step-1",
                 title="Market Regime Identified",
             )
+            vol_task = self.vol_analyst.run(
+                input_data=surface,
+                decision_id=decision_id,
+                step_id="step-2",
+                title="Unusual Put Skew Detected",
+            )
+
+            (research_out, trace_1), (vol_out, trace_2) = await asyncio.gather(research_task, vol_task)
             trace_steps.append(trace_1)
+            trace_steps.append(trace_2)
+
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="researcher_completed",
@@ -197,22 +215,6 @@ class VoltronOrchestrator:
                 message=f"Researcher identified: {research_out.marketRegimeSummary}",
                 payload=research_out.model_dump(),
             )
-
-            # Stage 5: Run Volatility Analyst Agent
-            await self._emit_event(
-                decision_id=decision_id,
-                event_type="volatility_started",
-                stage="VOLATILITY",
-                status="ACTIVE",
-                message="Volatility Analyst interpreting skew and term structure...",
-            )
-            vol_out, trace_2 = await self.vol_analyst.run(
-                input_data=surface,
-                decision_id=decision_id,
-                step_id="step-2",
-                title="Unusual Put Skew Detected",
-            )
-            trace_steps.append(trace_2)
             await self._emit_event(
                 decision_id=decision_id,
                 event_type="volatility_completed",

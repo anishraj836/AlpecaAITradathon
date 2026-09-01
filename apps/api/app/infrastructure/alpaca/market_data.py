@@ -1,8 +1,13 @@
+import time
 import httpx
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from app.config import settings
 from app.domain.models import MarketContext
 from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
+
+_MARKET_CONTEXT_CACHE: Dict[str, Tuple[float, MarketContext]] = {}
+_NEWS_CACHE: Dict[str, Tuple[float, list]] = {}
+CACHE_TTL_SECONDS = 45.0
 
 class AlpacaMarketDataService:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
@@ -15,6 +20,11 @@ class AlpacaMarketDataService:
 
     async def get_market_context(self, symbol: str) -> MarketContext:
         symbol = symbol.upper()
+        now_ts = time.time()
+        if symbol in _MARKET_CONTEXT_CACHE:
+            ts, cached_ctx = _MARKET_CONTEXT_CACHE[symbol]
+            if now_ts - ts < CACHE_TTL_SECONDS:
+                return cached_ctx
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
             # Deterministic live benchmark fallback
             return AlpacaNormalizer.normalize_market_context(
@@ -43,7 +53,7 @@ class AlpacaMarketDataService:
                 prev_close = float(prev_daily_bar.get("c", price))
                 change_pct = ((price - prev_close) / prev_close * 100.0) if prev_close else 0.0
 
-                return AlpacaNormalizer.normalize_market_context(
+                ctx = AlpacaNormalizer.normalize_market_context(
                     symbol=symbol,
                     price=price,
                     change_pct=change_pct,
@@ -51,8 +61,12 @@ class AlpacaMarketDataService:
                     low=float(daily_bar.get("l", price * 0.99)),
                     volume=int(daily_bar.get("v", 80000000)),
                 )
+                _MARKET_CONTEXT_CACHE[symbol] = (now_ts, ctx)
+                return ctx
             else:
-                return AlpacaNormalizer.normalize_market_context(symbol=symbol, price=645.31, change_pct=0.82)
+                ctx = AlpacaNormalizer.normalize_market_context(symbol=symbol, price=645.31, change_pct=0.82)
+                _MARKET_CONTEXT_CACHE[symbol] = (now_ts, ctx)
+                return ctx
 
     async def get_clock(self) -> Dict[str, Any]:
         """
@@ -114,9 +128,15 @@ class AlpacaMarketDataService:
         Fetch real-time market news headlines and summaries from Alpaca News API (GET /v2/news).
         """
         symbol = symbol.upper()
+        now_ts = time.time()
+        if symbol in _NEWS_CACHE:
+            ts, cached_news = _NEWS_CACHE[symbol]
+            if now_ts - ts < CACHE_TTL_SECONDS:
+                return cached_news
+
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
             # Deterministic news fixture for testing and offline modes
-            return [
+            dummy_news = [
                 {
                     "headline": f"{symbol} consolidates in low-dispersion corridor as options skew reflects tail protection",
                     "summary": f"Options trading volume on {symbol} reflects steady institutional hedging with elevated downside put demand.",
@@ -132,6 +152,8 @@ class AlpacaMarketDataService:
                     "created_at": "2026-08-31T11:00:00Z",
                 },
             ]
+            _NEWS_CACHE[symbol] = (now_ts, dummy_news)
+            return dummy_news
 
         try:
             async with httpx.AsyncClient() as client:
@@ -144,7 +166,7 @@ class AlpacaMarketDataService:
                 if resp.status_code == 200:
                     data = resp.json()
                     raw_news = data.get("news", [])
-                    return [
+                    news_list = [
                         {
                             "headline": item.get("headline", ""),
                             "summary": item.get("summary", ""),
@@ -155,6 +177,9 @@ class AlpacaMarketDataService:
                         }
                         for item in raw_news
                     ]
+                    if news_list:
+                        _NEWS_CACHE[symbol] = (now_ts, news_list)
+                    return news_list
         except Exception:
             pass
 
