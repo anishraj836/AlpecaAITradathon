@@ -301,6 +301,28 @@ def _find_chain_contract(
         return closest
     return None
 
+def _resolve_ticker_vol(symbol: str, chain: Optional[List[Dict[str, Any]]] = None) -> Dict[str, float]:
+    """Dynamically resolve underlying asset implied volatility from option chain or ticker profile."""
+    from surface import _get_ticker_vol_profile
+    prof = _get_ticker_vol_profile(symbol)
+    atm_iv = prof["atm_iv"]
+    put_iv = prof["put_iv"]
+    call_iv = prof["call_iv"]
+
+    if chain:
+        chain_ivs = [float(c.get("iv", 0)) for c in chain if float(c.get("iv", 0) or 0) > 0.05]
+        if chain_ivs:
+            chain_ivs.sort()
+            atm_iv = chain_ivs[len(chain_ivs) // 2]
+            put_iv = round(atm_iv * prof.get("skew_ratio", 1.25), 3)
+            call_iv = round(atm_iv * 0.92, 3)
+
+    return {
+        "atm_iv": atm_iv,
+        "put_iv": put_iv,
+        "call_iv": call_iv,
+    }
+
 def _get_strike_step(spot: float) -> float:
     """Determine standard strike width for underlying price."""
     if spot >= 300.0:
@@ -323,9 +345,14 @@ def generate_iron_condor(
     width = wing_width if wing_width is not None else step
     t_exp = max(0.001, dte / 365.25)
 
-    # Exact analytical Black-Scholes strike inversion for target delta
-    raw_sp = strike_from_delta(spot, target_delta, t_exp, vol=0.24, rate=0.045, is_call=False)
-    raw_sc = strike_from_delta(spot, target_delta, t_exp, vol=0.22, rate=0.045, is_call=True)
+    v_prof = _resolve_ticker_vol(symbol, chain)
+    sp_vol = v_prof["put_iv"]
+    sc_vol = v_prof["call_iv"]
+    atm_vol = v_prof["atm_iv"]
+
+    # Exact analytical Black-Scholes strike inversion for target delta using actual asset volatility
+    raw_sp = strike_from_delta(spot, target_delta, t_exp, vol=sp_vol, rate=0.045, is_call=False)
+    raw_sc = strike_from_delta(spot, target_delta, t_exp, vol=sc_vol, rate=0.045, is_call=True)
 
     sp = round(raw_sp / step) * step
     lp = sp - width
@@ -361,18 +388,18 @@ def generate_iron_condor(
         actual_lc = actual_sc + width
         c_lc = _find_chain_contract(chain, actual_lc, "CALL")
 
-    # Build legs
-    leg1 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-1", base_iv=0.26, chain_contract=c_lp)
-    leg2 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-2", base_iv=0.25, chain_contract=c_sp)
-    leg3 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-3", base_iv=0.22, chain_contract=c_sc)
-    leg4 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-4", base_iv=0.23, chain_contract=c_lc)
+    # Build legs using asset-specific volatility
+    leg1 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-1", base_iv=round(sp_vol * 1.04, 3), chain_contract=c_lp)
+    leg2 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-2", base_iv=sp_vol, chain_contract=c_sp)
+    leg3 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-3", base_iv=sc_vol, chain_contract=c_sc)
+    leg4 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-4", base_iv=round(sc_vol * 1.04, 3), chain_contract=c_lc)
 
     # Net credit = (Sell Put + Sell Call) - (Buy Put + Buy Call)
     net_credit = max(0.20, round((leg2["mid"] + leg3["mid"]) - (leg1["mid"] + leg4["mid"]), 2))
 
     bounds = calculate_max_profit_loss("Iron Condor", actual_sp, actual_lp, actual_sc, actual_lc, net_credit)
     bes = calculate_breakevens("Iron Condor", actual_sp, actual_lp, actual_sc, actual_lc, net_credit)
-    pop = estimate_probability_of_profit(spot, bes, 0.22, dte / 365.25)
+    pop = estimate_probability_of_profit(spot, bes, atm_vol, dte / 365.25)
     liq = 93
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.27)
 
@@ -410,8 +437,12 @@ def generate_put_credit_spread(
     width = wing_width if wing_width is not None else step
     t_exp = max(0.001, dte / 365.25)
 
-    # 25-delta short put strike via exact analytical inversion
-    raw_sp = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=0.25, rate=0.045, is_call=False)
+    v_prof = _resolve_ticker_vol(symbol, chain)
+    sp_vol = v_prof["put_iv"]
+    atm_vol = v_prof["atm_iv"]
+
+    # 25-delta short put strike via exact analytical inversion using actual downside put volatility
+    raw_sp = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=sp_vol, rate=0.045, is_call=False)
     sp = round(raw_sp / step) * step
     lp = sp - width
 
@@ -424,14 +455,14 @@ def generate_put_credit_spread(
         actual_lp = actual_sp - width
         c_lp = _find_chain_contract(chain, actual_lp, "PUT")
 
-    leg5 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-5", base_iv=0.26, chain_contract=c_lp)
-    leg6 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-6", base_iv=0.25, chain_contract=c_sp)
+    leg5 = _build_option_leg(symbol, spot, actual_lp, dte, "PUT", "BUY", "leg-5", base_iv=round(sp_vol * 1.04, 3), chain_contract=c_lp)
+    leg6 = _build_option_leg(symbol, spot, actual_sp, dte, "PUT", "SELL", "leg-6", base_iv=sp_vol, chain_contract=c_sp)
 
     net_credit = max(0.15, round(leg6["mid"] - leg5["mid"], 2))
 
     bounds = calculate_max_profit_loss("Put Credit Spread", actual_sp, actual_lp, net_credit=net_credit)
     bes = calculate_breakevens("Put Credit Spread", actual_sp, actual_lp, net_credit=net_credit)
-    pop = estimate_probability_of_profit(spot, bes, 0.24, dte / 365.25)
+    pop = estimate_probability_of_profit(spot, bes, atm_vol, dte / 365.25)
     liq = 95
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.30)
 
@@ -466,8 +497,12 @@ def generate_call_credit_spread(
     width = wing_width if wing_width is not None else step
     t_exp = max(0.001, dte / 365.25)
 
-    # 25-delta short call strike via exact analytical inversion
-    raw_sc = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=0.22, rate=0.045, is_call=True)
+    v_prof = _resolve_ticker_vol(symbol, chain)
+    sc_vol = v_prof["call_iv"]
+    atm_vol = v_prof["atm_iv"]
+
+    # 25-delta short call strike via exact analytical inversion using actual call volatility
+    raw_sc = strike_from_delta(spot, target_delta=0.25, time_to_exp=t_exp, vol=sc_vol, rate=0.045, is_call=True)
     sc = round(raw_sc / step) * step
     lc = sc + width
 
@@ -480,14 +515,14 @@ def generate_call_credit_spread(
         actual_lc = actual_sc + width
         c_lc = _find_chain_contract(chain, actual_lc, "CALL")
 
-    leg7 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-7", base_iv=0.22, chain_contract=c_sc)
-    leg8 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-8", base_iv=0.23, chain_contract=c_lc)
+    leg7 = _build_option_leg(symbol, spot, actual_sc, dte, "CALL", "SELL", "leg-7", base_iv=sc_vol, chain_contract=c_sc)
+    leg8 = _build_option_leg(symbol, spot, actual_lc, dte, "CALL", "BUY", "leg-8", base_iv=round(sc_vol * 1.04, 3), chain_contract=c_lc)
 
     net_credit = max(0.15, round(leg7["mid"] - leg8["mid"], 2))
 
     bounds = calculate_max_profit_loss("Call Credit Spread", actual_sc, actual_lc, net_credit=net_credit)
     bes = calculate_breakevens("Call Credit Spread", actual_sc, actual_lc, net_credit=net_credit)
-    pop = estimate_probability_of_profit(spot, bes, 0.22, dte / 365.25)
+    pop = estimate_probability_of_profit(spot, bes, atm_vol, dte / 365.25)
     liq = 91
     score = score_strategy_candidate(pop, bounds["maxProfit"], bounds["maxLoss"], liq, 1.15)
 
