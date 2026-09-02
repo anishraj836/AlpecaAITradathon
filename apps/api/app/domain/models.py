@@ -56,6 +56,9 @@ class StrategyCandidate(BaseModel):
     isWinner: bool = False
     rejectionReason: Optional[str] = None
     rank: Optional[int] = None
+    zeroUpsideRisk: Optional[bool] = False
+    expectedWinRate: Optional[float] = None
+    banditMultiplier: Optional[float] = None
 
 class VolatilitySurfacePoint(BaseModel):
     strike: float

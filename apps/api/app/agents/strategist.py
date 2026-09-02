@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 from app.agents.base import BaseAgent
 from app.domain.models import (
@@ -21,6 +21,7 @@ class StrategyAnalystInput(BaseModel):
     research: MarketResearch
     volatility: VolatilityAnalysis
     candidates: List[StrategyCandidate]
+    learningMemory: Optional[Dict[str, Any]] = None
 
 class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
     """
@@ -51,14 +52,19 @@ class StrategyAnalystAgent(BaseAgent[StrategyAnalystInput, StrategySelection]):
         # 1. Attempt Live LLM Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
         if llm_client.is_configured:
             cand_summary = [
-                f"- ID: {c.id} | Name: {c.name} | POP: {c.pop}% | Score: {c.score} | Net Credit: ${c.netCreditOrDebit} | Max Profit: ${c.maxProfit} | Max Risk: ${c.maxLoss}"
+                f"- ID: {c.id} | Name: {c.name} | POP: {c.pop}% | Score: {c.score} | Net Credit: ${c.netCreditOrDebit} | Max Profit: ${c.maxProfit} | Max Risk: ${c.maxLoss} | ZeroUpsideRisk: {c.zeroUpsideRisk} | ExpectedWinRate: {c.expectedWinRate}"
                 for c in valid_unrejected
             ]
+            learning_context = ""
+            if input_data.learningMemory and input_data.learningMemory.get("promptSummary"):
+                learning_context = f"\n\n[HISTORICAL EXPERIENCE & REFLEXION MEMORY]\n{input_data.learningMemory['promptSummary']}\n"
+
             prompt = (
                 f"Market Regime: {input_data.research.marketRegimeSummary}\n"
-                f"Volatility Skew: {input_data.volatility.skewInterpretation}\n\n"
-                f"Available Pre-Computed Strategy Candidates:\n" + "\n".join(cand_summary) + "\n\n"
-                f"Select the single best candidate ID and explain the quantitative rationale."
+                f"Volatility Skew: {input_data.volatility.skewInterpretation}\n"
+                f"{learning_context}\n"
+                f"Available Pre-Computed Strategy Candidates (Ranked by Bayesian Quant Score):\n" + "\n".join(cand_summary) + "\n\n"
+                f"Select the single best candidate ID and explain the quantitative rationale, factoring in historical win rates and current skew."
             )
             llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,

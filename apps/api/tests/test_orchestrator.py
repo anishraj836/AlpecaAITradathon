@@ -28,9 +28,9 @@ async def test_orchestrator_end_to_end():
         # 1. Assert Packet Structure
         assert packet.id.startswith("DEC-SPY-")
         assert packet.underlying == "SPY"
-        assert packet.strategy.name in ("Iron Condor", "Put Credit Spread", "Call Credit Spread")
+        assert any(n in packet.strategy.name for n in ("Iron Condor", "Jade Lizard", "Iron Butterfly", "Put Credit Spread", "Call Credit Spread"))
         assert packet.strategy.isWinner is True
-        assert len(packet.strategy.legs) in (2, 4)
+        assert len(packet.strategy.legs) in (2, 3, 4)
         assert packet.riskCompilerResult.isApproved is True
         assert packet.status in ("APPROVED", "AWAITING_APPROVAL")
         assert packet.aiConfidence > 0

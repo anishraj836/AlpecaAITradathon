@@ -61,6 +61,9 @@ export interface StrategyCandidate {
   isWinner?: boolean;
   rejectionReason?: string;
   rank?: number;
+  zeroUpsideRisk?: boolean;
+  expectedWinRate?: number;
+  banditMultiplier?: number;
 }
 
 export interface VolatilitySurfacePoint {

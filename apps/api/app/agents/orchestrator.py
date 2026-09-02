@@ -37,6 +37,7 @@ from app.agents.volatility import VolatilityAnalystAgent
 from app.agents.strategist import StrategyAnalystAgent, StrategyAnalystInput
 from app.agents.critic import CriticAgent, CriticInput
 from app.services.event_broadcaster import broadcaster
+from app.services.learning_service import learning_service
 from app.config import settings
 
 logger = logging.getLogger("VoltronOrchestrator")
@@ -233,16 +234,21 @@ class VoltronOrchestrator:
                 status="ACTIVE",
                 message="Strategy Analyst selecting winning candidate structure...",
             )
+
+            # Ingest live empirical learning & reflexion memory from past executions
+            learning_memory = await learning_service.get_learning_memory(self.session, symbol)
+
             strat_input = StrategyAnalystInput(
                 research=research_out,
                 volatility=vol_out,
                 candidates=candidates,
+                learningMemory=learning_memory,
             )
             strat_out, trace_3 = await self.strategist.run(
                 input_data=strat_input,
                 decision_id=decision_id,
                 step_id="step-3",
-                title="Candidate #1 Selected",
+                title="Candidate Selection (Bayesian Bandit Calibrated)",
             )
             trace_steps.append(trace_3)
 
@@ -274,12 +280,13 @@ class VoltronOrchestrator:
                 stressReport=stress_report,
                 research=research_out,
                 volatility=vol_out,
+                learningMemory=learning_memory,
             )
             critic_out, trace_4 = await self.critic.run(
                 input_data=critic_input,
                 decision_id=decision_id,
                 step_id="step-4",
-                title="Upside Breakout Risk Identified",
+                title="Adversarial Vulnerability & Reflexion Check",
             )
             trace_steps.append(trace_4)
             await self._emit_event(

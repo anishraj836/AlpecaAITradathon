@@ -33,9 +33,9 @@ async def test_mleg_compiler_valid_condor():
     assert payload.orderType == "limit"
     assert payload.timeInForce == "day"
     assert payload.limitPrice == abs(strategy.netCreditOrDebit)
-    assert len(payload.legs) == 4
-    assert payload.legs[0].position_intent == "buy_to_open"
-    assert payload.legs[1].position_intent == "sell_to_open"
+    assert len(payload.legs) == len(strategy.legs)
+    assert payload.legs[0].position_intent in ["buy_to_open", "sell_to_open"]
+    assert payload.legs[1].position_intent in ["buy_to_open", "sell_to_open"]
 
 @pytest.mark.asyncio
 async def test_mleg_compiler_mismatched_underlying_fails():

@@ -431,3 +431,32 @@ class TestJsonRpcMcpServer:
         assert risk["isApproved"] is True
         assert risk["budgetCheck"]["passed"] is True
 
+    def test_jade_lizard_and_iron_butterfly(self):
+        from strategies import generate_jade_lizard, generate_iron_butterfly, generate_all_candidate_structures, get_bandit_metrics
+        # 1. Jade Lizard
+        jl = generate_jade_lizard("SPY", 600.0, dte=30, wing_width=5.0)
+        assert jl["name"].startswith("Jade Lizard")
+        assert len(jl["legs"]) == 3
+        assert jl["zeroUpsideRisk"] is True
+        assert jl["pop"] >= 0.70
+        assert len(jl["breakevens"]) == 1
+
+        # 2. Iron Butterfly
+        ib = generate_iron_butterfly("SPY", 600.0, dte=30, wing_width=5.0)
+        assert ib["name"].startswith("Iron Butterfly")
+        assert len(ib["legs"]) == 4
+        assert ib["maxProfit"] > 0
+        assert len(ib["breakevens"]) == 2
+
+        # 3. Dynamic tournament candidates
+        cands = generate_all_candidate_structures("SPY", 600.0)
+        assert len(cands) >= 6
+        winner = next(c for c in cands if c.get("isWinner"))
+        assert winner["rank"] == 1
+        assert winner["score"] > 50.0
+
+        # 4. Bandit metrics
+        meta = get_bandit_metrics("JADE_LIZARD")
+        assert meta["expectedWinRate"] > 0.75
+        assert meta["banditMultiplier"] > 1.0
+

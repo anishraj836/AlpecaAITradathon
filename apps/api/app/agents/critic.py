@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from pydantic import BaseModel
 from app.agents.base import BaseAgent
 from app.domain.models import (
@@ -22,6 +22,7 @@ class CriticInput(BaseModel):
     stressReport: StressReport
     research: MarketResearch
     volatility: VolatilityAnalysis
+    learningMemory: Optional[Dict[str, Any]] = None
 
 class CriticAgent(BaseAgent[CriticInput, Critique]):
     """
@@ -43,6 +44,10 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
 
         # 1. Attempt Live LLM Adversarial Reasoning (Gemini, OpenAI, Groq, Anthropic, Ollama, DeepSeek)
         if llm_client.is_configured:
+            learning_context = ""
+            if input_data.learningMemory and input_data.learningMemory.get("promptSummary"):
+                learning_context = f"\n\n[HISTORICAL EXPERIENCE & PAST LOSS POST-MORTEMS]\n{input_data.learningMemory['promptSummary']}\n"
+
             prompt = (
                 f"Candidate Strategy to Invalidate:\n"
                 f"- Name: {strat.name}\n"
@@ -50,9 +55,11 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
                 f"- Net Credit: ${strat.netCreditOrDebit}\n"
                 f"- Max Loss: ${strat.maxLoss}\n"
                 f"- Breakevens: {strat.breakevens}\n"
+                f"- Zero Upside Risk: {strat.zeroUpsideRisk}\n"
                 f"- Market Regime: {input_data.research.marketRegimeSummary}\n"
-                f"- Volatility Skew: {input_data.volatility.skewInterpretation}\n\n"
-                f"Stress-test this trade aggressively. Identify primary failure modes, breakout vulnerabilities, and risk recommendations."
+                f"- Volatility Skew: {input_data.volatility.skewInterpretation}\n"
+                f"{learning_context}\n"
+                f"Stress-test this trade aggressively. Specifically compare against historical failure modes. Identify primary failure modes, breakout vulnerabilities, and risk recommendations."
             )
             llm_out = await llm_client.generate_structured(
                 system_instruction=self.system_prompt,
@@ -76,7 +83,33 @@ class CriticAgent(BaseAgent[CriticInput, Critique]):
 
         # Assess breakevens with strategy-type awareness
         breakevens = strat.breakevens
-        if "condor" in strat_name or len(breakevens) >= 2:
+        if "lizard" in strat_name:
+            lower_be = breakevens[0] if breakevens else (input_data.research.spotPrice * 0.95)
+            primary_failure = f"Downside crash below ${lower_be:.2f} (Upside has ZERO risk)."
+            details = f"Jade Lizard has zero upside risk due to net credit exceeding call spread width. Risk is strictly concentrated on downside liquidation below ${lower_be:.2f}."
+            failure_scenarios = [
+                f"Severe market-wide gap down below ${lower_be:.2f} short put strike.",
+                f"Elevated put skew expansion under extreme downside stress (-10% move results in -${worst_loss:,.2f}).",
+                "Upside breakout risk is mathematically eliminated (zero upside risk verified).",
+            ]
+            recommendations = [
+                f"Set stop-loss trigger if underlying trades below ${lower_be:.2f}.",
+                "Roll short put down and out if earnings date moves into current expiration cycle.",
+            ]
+        elif "butterfly" in strat_name:
+            lower_be = breakevens[0] if len(breakevens) >= 2 else (input_data.research.spotPrice * 0.97)
+            upper_be = breakevens[1] if len(breakevens) >= 2 else (input_data.research.spotPrice * 1.03)
+            primary_failure = f"Pin drift outside narrow [${lower_be:.2f}, ${upper_be:.2f}] ATM tent."
+            details = f"Iron Butterfly requires the underlying to pin near ATM strike for maximum profit. Large directional moves rapidly breach wings."
+            failure_scenarios = [
+                f"Trend acceleration past ${upper_be:.2f} upside or ${lower_be:.2f} downside.",
+                "Realized volatility exceeding implied expectations before theta decay accelerates.",
+            ]
+            recommendations = [
+                "Take profit early at 25-50% of max profit rather than attempting to hold for exact ATM pin.",
+                "Close position immediately if underlying moves beyond either breakeven.",
+            ]
+        elif "condor" in strat_name or len(breakevens) >= 2:
             lower_be = breakevens[0] if len(breakevens) >= 2 else 628.62
             upper_be = breakevens[1] if len(breakevens) >= 2 else 661.38
             primary_failure = f"Corridor breach outside ${lower_be:.2f} - ${upper_be:.2f} range."

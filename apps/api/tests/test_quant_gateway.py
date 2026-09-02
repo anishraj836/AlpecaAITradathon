@@ -20,7 +20,7 @@ async def test_generate_candidates():
     winner = candidates[0]
     assert winner.isWinner is True
     assert winner.score > 60.0
-    assert len(winner.legs) == 4
+    assert len(winner.legs) in (2, 3, 4)
     # Verify rejected candidate has rejection reason
     rejected = candidates[-1]
     assert rejected.rejectionReason is not None

@@ -164,11 +164,28 @@ export default function OpportunityScannerPage() {
                         0{idx + 1}
                       </span>
                       <div>
-                        <h3 className="font-data-lg text-data-lg text-on-surface uppercase tracking-tight font-bold">
-                          {strat.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-data-lg text-data-lg text-on-surface uppercase tracking-tight font-bold">
+                            {strat.name}
+                          </h3>
+                          {strat.zeroUpsideRisk && (
+                            <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">
+                              🛡️ ZERO UPSIDE RISK
+                            </span>
+                          )}
+                          {strat.name.toLowerCase().includes('butterfly') && (
+                            <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded">
+                              ⚡ 1:1 REWARD-RISK
+                            </span>
+                          )}
+                          {strat.banditMultiplier && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded">
+                              🤖 ML {strat.banditMultiplier}x
+                            </span>
+                          )}
+                        </div>
                         <span className="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-widest block mt-1 font-mono">
-                          {strat.dte} DTE | {strat.underlying}
+                          {strat.dte} DTE | {strat.underlying} | Breakevens: {strat.breakevens.map(b => `$${b.toFixed(2)}`).join(' - ')}
                         </span>
                       </div>
                     </div>
@@ -182,10 +199,10 @@ export default function OpportunityScannerPage() {
                         </span>
                       </div>
                       <Link
-                        href="/decision/DEC-SPY-9942"
+                        href="/terminal"
                         className="px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded-sm font-data-md text-data-md hover:bg-primary/20 transition-colors uppercase tracking-wider font-mono font-semibold"
                       >
-                        View Analysis
+                        Trade Terminal
                       </Link>
                     </div>
                   </div>
@@ -209,9 +226,9 @@ export default function OpportunityScannerPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-label-xs text-label-xs text-outline uppercase tracking-wider mb-1 font-sans">
-                        POP
+                        POP (Win Prob)
                       </span>
-                      <span className="font-data-md text-data-md text-on-surface font-bold">
+                      <span className="font-data-md text-data-md text-emerald-400 font-bold">
                         {(strat.pop * 100).toFixed(1)}%
                       </span>
                     </div>
@@ -226,7 +243,7 @@ export default function OpportunityScannerPage() {
                   </div>
 
                   {strat.legs.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-outline-variant/20 flex gap-3 text-data-sm font-data-sm text-on-surface-variant font-mono">
+                    <div className="mt-4 pt-3 border-t border-outline-variant/20 flex flex-wrap gap-2 text-data-sm font-data-sm text-on-surface-variant font-mono">
                       {strat.legs.map((leg) => (
                         <span
                           key={leg.id}
@@ -236,8 +253,8 @@ export default function OpportunityScannerPage() {
                               : 'bg-error/10 text-error border border-error/20'
                           }`}
                         >
-                          {leg.side === 'BUY' ? '+1' : '-1'} {leg.underlying} {leg.strike}{' '}
-                          {leg.type === 'CALL' ? 'C' : 'P'}
+                          {leg.side === 'BUY' ? '+1' : '-1'} {leg.underlying} ${leg.strike.toFixed(2)}{' '}
+                          {leg.type === 'CALL' ? 'CALL' : 'PUT'} (Δ{(leg.delta || 0).toFixed(2)})
                         </span>
                       ))}
                     </div>
