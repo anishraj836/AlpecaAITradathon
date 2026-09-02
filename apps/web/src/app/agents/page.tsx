@@ -107,7 +107,7 @@ export default function AgentsDashboardPage() {
     return () => clearInterval(timer);
   }, [daemon?.isPaused, daemon?.isExecuting, daemon?.cycleIntervalSeconds, daemon?.executionElapsedSeconds]);
 
-  const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL', payload?: any) => {
+  const handleControl = async (action: import('@/types/voltron').AutonomousControlRequest['action'], payload?: any) => {
     setActionLoading(true);
     try {
       const updatedDaemon = await api.controlAutonomousDaemon({
@@ -120,6 +120,7 @@ export default function AgentsDashboardPage() {
       else if (action === 'RESUME') setNotification('▶️ Autonomous worker loop resumed.');
       else if (action === 'TRIGGER_SCAN') setNotification(`⚡ Manual scan triggered for ${payload?.symbol || 'watchlist'}.`);
       else if (action === 'SET_AUTONOMY') setNotification(`🛡️ Autonomy level updated to ${payload?.autonomyLevel}.`);
+      else if (action === 'SET_AUTO_DISCOVERY') setNotification(payload?.autoDiscoverNewsTickers ? '📰 Autonomous News Discovery ENABLED.' : '📰 Autonomous News Discovery DISABLED.');
       else if (action === 'SET_RATE_LIMIT_GUARD') setNotification(payload?.rateLimitGuardEnabled ? '🛡️ Rate-Limit Guard ENABLED (15 RPM Safe Mode).' : '⚡ Rate-Limit Guard DISABLED (Uncapped Turbo Mode).');
       else if (action === 'SET_CYCLE_INTERVAL') setNotification(`⏱️ Cycle interval set to ${payload?.cycleIntervalSeconds}s.`);
       else if (action === 'SET_WATCHLIST') setNotification('📋 Watchlist successfully updated.');
@@ -273,8 +274,55 @@ export default function AgentsDashboardPage() {
                 {daemon?.rateLimitGuard ? 'verified_user' : 'lock_open'}
               </span>
               <span>
-                {daemon?.rateLimitGuard ? 'CAPPED MODE: ON (15 RPM SAFE)' : 'CAPPED MODE: OFF (UNCAPPED)'}
+                {daemon?.rateLimitGuard ? 'CAPPED MODE: ON' : 'UNCAPPED'}
               </span>
+            </button>
+
+            {/* Autonomous News Discovery Toggle */}
+            <button
+              type="button"
+              onClick={() => handleControl('SET_AUTO_DISCOVERY', { autoDiscoverNewsTickers: !daemon?.autoDiscoverNewsTickers })}
+              disabled={actionLoading}
+              title="Autonomous News Discovery: Ingests breaking financial headlines from Alpaca, checks option chain liquidity, and automatically adds high-catalyst tickers to the rotation."
+              className={`px-3 py-1.5 rounded-sm font-mono text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                daemon?.autoDiscoverNewsTickers
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25 shadow-xs'
+                  : 'bg-surface text-outline border-outline-variant/40 hover:text-on-surface hover:border-outline'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px] text-cyan-400">
+                {daemon?.autoDiscoverNewsTickers ? 'newspaper' : 'feed'}
+              </span>
+              <span>
+                {daemon?.autoDiscoverNewsTickers ? 'NEWS DISCOVERY: ON' : 'NEWS DISCOVERY: OFF'}
+              </span>
+            </button>
+
+            {/* Quick Scan News Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  setActionLoading(true);
+                  const found = await api.discoverNewsTickers();
+                  if (found && found.length > 0) {
+                    setNotification(`⚡ Discovered ${found.length} catalyst tickers: ${found.map(f => f.symbol).join(', ')}`);
+                  } else {
+                    setNotification('📰 Scanned news: Current watchlist already covers top catalysts.');
+                  }
+                  await fetchTelemetry();
+                } catch (e) {
+                  console.warn('Discovery error:', e);
+                } finally {
+                  setActionLoading(false);
+                }
+              }}
+              disabled={actionLoading}
+              className="px-2.5 py-1.5 bg-surface border border-outline-variant/40 hover:border-cyan-400 text-outline hover:text-cyan-400 rounded-sm font-mono text-xs font-bold flex items-center gap-1 transition-colors"
+              title="Immediately scan live market news for catalyst tickers"
+            >
+              <span className="material-symbols-outlined text-[14px]">travel_explore</span>
+              <span>SCAN NEWS</span>
             </button>
 
             {/* Trigger Immediate Scan */}
@@ -455,41 +503,58 @@ export default function AgentsDashboardPage() {
         </div>
 
         {/* Watchlist Strip */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-outline-variant/20">
-          <span className="text-[11px] font-mono text-outline uppercase font-bold">
-            Autonomous Scan Watchlist:
-          </span>
-          {daemon?.watchlist.map((sym) => (
-            <div
-              key={sym}
-              className="flex items-center gap-1 px-2 py-0.5 bg-surface border border-outline-variant/30 rounded-sm font-mono text-xs font-bold text-primary"
-            >
-              <span>{sym}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-mono text-outline uppercase font-bold flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px] text-cyan-400">dynamic_feed</span>
+              <span>Autonomous Watchlist:</span>
+            </span>
+            {daemon?.watchlist.map((sym) => {
+              const isDefault = ["SPY", "PLTR", "NVDA", "TSLA", "AAPL", "QQQ"].includes(sym);
+              return (
+                <div
+                  key={sym}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-sm font-mono text-xs font-bold border transition-all ${
+                    !isDefault
+                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300 shadow-xs'
+                      : 'bg-surface border-outline-variant/30 text-primary'
+                  }`}
+                  title={!isDefault ? `Autonomously discovered via breaking news catalyst` : `Core rotation asset`}
+                >
+                  {!isDefault && <span className="text-[9px] text-cyan-400">⚡</span>}
+                  <span>{sym}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTicker(sym)}
+                    className="text-outline hover:text-error transition-colors text-[10px] ml-0.5"
+                    title={`Remove ${sym}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <form onSubmit={handleAddTicker} className="flex items-center gap-1">
+              <input
+                type="text"
+                placeholder="+ Ticker"
+                value={newTickerInput}
+                onChange={(e) => setNewTickerInput(e.target.value.toUpperCase())}
+                className="w-20 px-2 py-0.5 bg-surface border border-outline-variant/30 rounded-sm text-xs font-mono text-on-surface uppercase outline-none font-bold placeholder:text-outline"
+              />
               <button
-                type="button"
-                onClick={() => handleRemoveTicker(sym)}
-                className="text-outline hover:text-error transition-colors text-[10px] ml-0.5"
-                title={`Remove ${sym}`}
+                type="submit"
+                className="px-2 py-0.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-sm text-xs font-mono font-bold"
               >
-                ×
+                ADD
               </button>
-            </div>
-          ))}
-          <form onSubmit={handleAddTicker} className="flex items-center gap-1">
-            <input
-              type="text"
-              placeholder="+ Ticker"
-              value={newTickerInput}
-              onChange={(e) => setNewTickerInput(e.target.value.toUpperCase())}
-              className="w-20 px-2 py-0.5 bg-surface border border-outline-variant/30 rounded-sm text-xs font-mono text-on-surface uppercase outline-none font-bold placeholder:text-outline"
-            />
-            <button
-              type="submit"
-              className="px-2 py-0.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-sm text-xs font-mono font-bold"
-            >
-              ADD
-            </button>
-          </form>
+            </form>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            <span>Alpaca Breaking News Ingestion: ACTIVE</span>
+          </div>
         </div>
       </div>
 

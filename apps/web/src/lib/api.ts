@@ -42,6 +42,7 @@ export interface ApiClient {
   getAgentsStatus(): Promise<AgentsDashboardResponse>;
   getAgentLogs(role?: string, level?: string, limit?: number): Promise<AgentLogEntry[]>;
   controlAutonomousDaemon(req: AutonomousControlRequest): Promise<AutonomousDaemonState>;
+  discoverNewsTickers(): Promise<import('@/types/voltron').DiscoveredTicker[]>;
   getStrategyCandidates(underlying?: string, targetDelta?: number, budget?: number): Promise<StrategyCandidate[]>;
   getStressReport(strategyId?: string): Promise<StressReport>;
   getAgentTrace(decisionId?: string): Promise<AgentTraceStep[]>;
@@ -162,6 +163,12 @@ class HttpSseApiAdapter implements ApiClient {
     return this.fetchJson<AutonomousDaemonState>('/agents/control', {
       method: 'POST',
       body: JSON.stringify(req),
+    });
+  }
+
+  async discoverNewsTickers(): Promise<import('@/types/voltron').DiscoveredTicker[]> {
+    return this.fetchJson<import('@/types/voltron').DiscoveredTicker[]>('/agents/discover-tickers', {
+      method: 'POST',
     });
   }
 

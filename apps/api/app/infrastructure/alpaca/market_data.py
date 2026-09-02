@@ -1,6 +1,6 @@
 import time
 import httpx
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from app.config import settings
 from app.domain.models import MarketContext
 from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
@@ -203,7 +203,7 @@ class AlpacaMarketDataService:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    f"{settings.ALPACA_DATA_URL}/v2/news",
+                    "https://data.alpaca.markets/v1beta1/news",
                     headers=self.headers,
                     params={"symbols": symbol, "limit": limit, "include_content": "false"},
                     timeout=8.0,
@@ -227,5 +227,62 @@ class AlpacaMarketDataService:
                     return news_list
         except Exception:
             pass
+
+        return []
+
+    async def get_market_news(self, limit: int = 25) -> List[dict]:
+        """
+        Fetch broad breaking market news across all US equities from Alpaca News API.
+        Used by the Autonomous Agent to discover fresh catalysts and add new tickers dynamically.
+        """
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            return [
+                {
+                    "headline": "Palo Alto Networks Surges on Record Cybersecurity Revenue and Cloud Expansion",
+                    "summary": "PANW stock surges after crushing earnings estimates with accelerated AI-driven security adoption.",
+                    "source": "Benzinga / Alpaca Wire",
+                    "symbols": ["PANW"],
+                    "created_at": "2026-09-02T16:00:00Z",
+                },
+                {
+                    "headline": "Oracle Wins Multi-Billion Dollar Government AI Cloud Infrastructure Contract",
+                    "summary": "ORCL shares rally as enterprise cloud backlog expands 40% year-over-year.",
+                    "source": "Reuters",
+                    "symbols": ["ORCL"],
+                    "created_at": "2026-09-02T15:30:00Z",
+                },
+                {
+                    "headline": "AMD Unveils Next-Gen AI Accelerator to Challenge NVDA Monopoly",
+                    "summary": "AMD introduces high-bandwidth Instinct accelerators with major hyper-scaler partnerships.",
+                    "source": "Bloomberg",
+                    "symbols": ["AMD", "NVDA"],
+                    "created_at": "2026-09-02T14:45:00Z",
+                },
+            ]
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "https://data.alpaca.markets/v1beta1/news",
+                    headers=self.headers,
+                    params={"limit": limit, "include_content": "false", "sort": "desc"},
+                    timeout=10.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_news = data.get("news", [])
+                    return [
+                        {
+                            "headline": item.get("headline", ""),
+                            "summary": item.get("summary", ""),
+                            "source": item.get("source", "Alpaca"),
+                            "url": item.get("url", ""),
+                            "symbols": item.get("symbols", []),
+                            "created_at": item.get("created_at", ""),
+                        }
+                        for item in raw_news
+                    ]
+        except Exception as e:
+            logger.debug(f"Alpaca market news fetch error: {e}")
 
         return []

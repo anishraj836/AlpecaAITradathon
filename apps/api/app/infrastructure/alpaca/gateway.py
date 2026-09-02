@@ -71,6 +71,10 @@ class BrokerGateway(ABC):
         """Retrieve latest market news headlines and catalyst summaries for a symbol."""
         return []
 
+    async def get_market_news(self, limit: int = 20) -> List[dict]:
+        """Retrieve broad real-time financial market news headlines across all tickers."""
+        return []
+
     async def close_position(self, symbol_or_asset_id: str, qty: Optional[float] = None) -> dict:
         """Liquidate an individual open stock or options position."""
         return {"status": "success", "symbol": symbol_or_asset_id, "closed": True, "qty": qty or 1.0}

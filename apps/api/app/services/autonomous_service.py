@@ -16,6 +16,7 @@ from app.domain.models import (
 )
 from app.services.event_broadcaster import broadcaster
 from app.services.liquidation_service import liquidation_service
+from app.services.news_discovery_service import news_discovery_service, DiscoveredTicker
 from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.infrastructure.database.session import async_session_factory
 from app.agents.orchestrator import VoltronOrchestrator
@@ -47,6 +48,9 @@ class AutonomousAgentService:
         self._cycle_execution_start_time = 0.0
         self._active_scan_symbol: Optional[str] = None
         self._rate_limit_guard = True
+        self._auto_discover_news = True
+        self._discovered_tickers: List[DiscoveredTicker] = []
+        self._news_discovery_cycle_counter = 0
         quota_guard.set_enabled(True)
         self._total_cycles = 0
         self._total_orders = 0
@@ -312,6 +316,56 @@ class AutonomousAgentService:
             logger.error(f"Error in autonomous liquidation check: {e}", exc_info=True)
             return 0
 
+    async def run_news_ticker_discovery(self) -> List[DiscoveredTicker]:
+        """
+        Autonomous Market Discovery:
+        Scans Alpaca breaking news, matches catalyst signals (earnings, guidance, surge, drop),
+        validates liquid option chains on Alpaca, and dynamically adds top candidates to the watchlist.
+        """
+        try:
+            discovered = await news_discovery_service.discover_candidates(
+                broker=self._broker,
+                existing_watchlist=self._watchlist,
+                limit=30,
+            )
+            if not discovered:
+                return []
+
+            for cand in discovered[:2]:
+                if cand.symbol not in self._watchlist:
+                    # Keep watchlist bounded to 12 tickers; cycle out oldest non-core ticker if needed
+                    if len(self._watchlist) >= 12:
+                        non_core = [s for s in self._watchlist if s not in ("SPY", "QQQ")]
+                        if non_core:
+                            removed = non_core[0]
+                            self._watchlist.remove(removed)
+                    self._watchlist.append(cand.symbol)
+                    self._discovered_tickers.insert(0, cand)
+                    if len(self._discovered_tickers) > 20:
+                        self._discovered_tickers.pop()
+
+                    self._append_log(
+                        "RESEARCHER",
+                        "Market Intelligence & News Agent",
+                        "DISPATCH",
+                        f"AUTONOMOUS DISCOVERY: Added ${cand.symbol} to active watchlist from breaking news! Catalyst: '{cand.headline[:75]}...' (Options: {cand.optionContractsCount} contracts, Confidence: {int(cand.confidenceScore*100)}%)",
+                        cand.symbol,
+                    )
+                    await broadcaster.broadcast(OrchestratorEvent(
+                        decisionId=f"DISC-{cand.symbol}",
+                        eventType="watchlist_updated",
+                        stage="RESEARCH",
+                        status="COMPLETE",
+                        message=f"Discovered {cand.symbol} via news catalyst: {cand.headline[:60]}...",
+                        timestamp=_now_iso(),
+                        payload={"symbol": cand.symbol, "watchlist": self._watchlist, "headline": cand.headline},
+                    ))
+
+            return discovered
+        except Exception as e:
+            logger.error(f"Error in run_news_ticker_discovery: {e}", exc_info=True)
+            return []
+
     async def execute_real_orchestrator_cycle(self, symbol: str):
         """
         Executes a 100% genuine multi-agent orchestrator scan on the given symbol:
@@ -329,8 +383,13 @@ class AutonomousAgentService:
         self._cycle_execution_start_time = time.time()
         logger.info(f"Starting real autonomous orchestrator cycle for {symbol}...")
 
-        # Evaluate and liquidate any existing positions meeting profit target or stop loss rules
+        # 1. Evaluate and liquidate any existing positions meeting profit target or stop loss rules
         await self.evaluate_and_liquidate_positions()
+
+        # 2. Autonomous News Discovery: Every 2 cycles, scan breaking news for new optionable tickers
+        self._news_discovery_cycle_counter += 1
+        if self._auto_discover_news and self._news_discovery_cycle_counter % 2 == 0:
+            asyncio.create_task(self.run_news_ticker_discovery())
 
         # Update initial agent statuses to show scan started
         for r, agent in self._agents.items():
@@ -532,6 +591,7 @@ class AutonomousAgentService:
             totalOrdersRejected=self._total_rejected,
             totalLiquidations=self._total_liquidations,
             totalDislocationsFound=self._total_dislocations,
+            autoDiscoverNewsTickers=self._auto_discover_news,
             rateLimitGuard=self._rate_limit_guard,
             estimatedRpm=quota_guard.get_current_rpm(),
             rpmLimit=quota_guard.rpm_limit,
@@ -564,6 +624,13 @@ class AutonomousAgentService:
             self._autonomy_level = req.autonomyLevel
             desc = "⚡ FREE TRADING MODE (Zero investment upper bounds / Free Margin Sizing)" if req.autonomyLevel == "UNCAPPED_AUTONOMOUS" else req.autonomyLevel
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Autonomy mode switched to {desc}.")
+        elif req.action == "SET_AUTO_DISCOVERY":
+            self._auto_discover_news = bool(req.autoDiscoverNewsTickers)
+            state_desc = "ENABLED" if self._auto_discover_news else "DISABLED"
+            self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"📰 Auto-Discovery of News Tickers {state_desc}.")
+        elif req.action == "DISCOVER_TICKERS":
+            self._append_log("RESEARCHER", "Market Intelligence & News Agent", "INFO", "User triggered manual news catalyst discovery scan.")
+            asyncio.create_task(self.run_news_ticker_discovery())
         elif req.action == "SET_RATE_LIMIT_GUARD":
             enabled = bool(req.rateLimitGuardEnabled)
             self._rate_limit_guard = enabled

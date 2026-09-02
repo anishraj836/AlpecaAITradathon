@@ -470,6 +470,7 @@ export interface AutonomousDaemonState {
   totalOrdersRejected: number;
   totalLiquidations?: number;
   totalDislocationsFound: number;
+  autoDiscoverNewsTickers?: boolean;
   rateLimitGuard: boolean;
   estimatedRpm: number;
   rpmLimit: number;
@@ -477,13 +478,24 @@ export interface AutonomousDaemonState {
   nextScanAt?: string;
 }
 
+export interface DiscoveredTicker {
+  symbol: string;
+  headline: string;
+  source: string;
+  catalystKeywords: string[];
+  confidenceScore: number;
+  optionContractsCount: number;
+  discoveredAt: string;
+}
+
 export interface AutonomousControlRequest {
-  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL';
+  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL' | 'SET_AUTO_DISCOVERY' | 'DISCOVER_TICKERS';
   autonomyLevel?: AutonomyLevel;
   watchlist?: string[];
   symbol?: string;
   rateLimitGuardEnabled?: boolean;
   cycleIntervalSeconds?: number;
+  autoDiscoverNewsTickers?: boolean;
 }
 
 export interface AgentsDashboardResponse {

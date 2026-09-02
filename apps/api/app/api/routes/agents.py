@@ -9,11 +9,17 @@ from app.domain.models import (
     AgentLogEntry,
     AutonomousDaemonState,
     AutonomousControlRequest,
+    DiscoveredTicker,
 )
 from app.services.autonomous_service import autonomous_agent_service
 from app.services.event_broadcaster import broadcaster
 
 router = APIRouter(prefix="/agents", tags=["Autonomous Agents Fleet"])
+
+@router.post("/discover-tickers", response_model=List[DiscoveredTicker])
+async def discover_market_tickers():
+    """Immediately scan breaking financial news, match high-volatility catalysts, and add qualifying optionable tickers to the watchlist."""
+    return await autonomous_agent_service.run_news_ticker_discovery()
 
 @router.get("/status", response_model=AgentsDashboardResponse)
 async def get_agents_status():

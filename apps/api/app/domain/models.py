@@ -520,19 +520,30 @@ class AutonomousDaemonState(BaseModel):
     totalOrdersRejected: int = 0
     totalLiquidations: int = 0
     totalDislocationsFound: int
+    autoDiscoverNewsTickers: bool = True
     rateLimitGuard: bool = True
     estimatedRpm: float = 0.0
     rpmLimit: int = 15
     lastScanAt: Optional[str] = None
     nextScanAt: Optional[str] = None
 
+class DiscoveredTicker(BaseModel):
+    symbol: str
+    headline: str
+    source: str
+    catalystKeywords: List[str] = Field(default_factory=list)
+    confidenceScore: float
+    optionContractsCount: int
+    discoveredAt: str
+
 class AutonomousControlRequest(BaseModel):
-    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST', 'SET_RATE_LIMIT_GUARD', 'SET_CYCLE_INTERVAL']
+    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST', 'SET_RATE_LIMIT_GUARD', 'SET_CYCLE_INTERVAL', 'SET_AUTO_DISCOVERY', 'DISCOVER_TICKERS']
     autonomyLevel: Optional[AutonomyLevel] = None
     watchlist: Optional[List[str]] = None
     symbol: Optional[str] = None
     rateLimitGuardEnabled: Optional[bool] = None
     cycleIntervalSeconds: Optional[int] = None
+    autoDiscoverNewsTickers: Optional[bool] = None
 
 class AgentsDashboardResponse(BaseModel):
     agents: List[AgentFleetStatus]
