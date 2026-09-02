@@ -95,13 +95,17 @@ export default function AgentsDashboardPage() {
     const timer = setInterval(() => {
       setRealtimeSeconds((prev) => {
         if (daemon?.isPaused) return 0;
-        if (daemon?.isExecuting) return daemon.cycleIntervalSeconds;
+        if (daemon?.isExecuting) {
+          return (daemon.executionElapsedSeconds !== undefined && daemon.executionElapsedSeconds > 0)
+            ? daemon.executionElapsedSeconds
+            : prev + 1;
+        }
         const max = daemon?.cycleIntervalSeconds || 60;
         return prev < max ? prev + 1 : 0;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [daemon?.isPaused, daemon?.isExecuting, daemon?.cycleIntervalSeconds]);
+  }, [daemon?.isPaused, daemon?.isExecuting, daemon?.cycleIntervalSeconds, daemon?.executionElapsedSeconds]);
 
   const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL', payload?: any) => {
     setActionLoading(true);
@@ -355,13 +359,13 @@ export default function AgentsDashboardPage() {
             <div className="flex items-center justify-between mt-1">
               <span className={`font-mono text-xs font-bold ${daemon?.isExecuting ? 'text-amber-400 animate-pulse' : 'text-primary'}`}>
                 {daemon?.isExecuting
-                  ? `⚡ SCANNING ${daemon?.activeScanSymbol || ''}...`
+                  ? `⚡ SCANNING ${daemon?.activeScanSymbol || ''} (${realtimeSeconds}s)`
                   : daemon?.isPaused
                   ? 'PAUSED'
                   : `${realtimeSeconds}s / ${daemon?.cycleIntervalSeconds || 60}s`}
               </span>
               <span className="text-[10px] font-mono text-outline">
-                {daemon?.isExecuting ? 'ACTIVE' : `${Math.min(100, Math.round((realtimeSeconds / (daemon?.cycleIntervalSeconds || 60)) * 100))}%`}
+                {daemon?.isExecuting ? 'DEBATING' : `${Math.min(100, Math.round((realtimeSeconds / (daemon?.cycleIntervalSeconds || 60)) * 100))}%`}
               </span>
             </div>
             {/* Real-time Animated Progress Bar */}

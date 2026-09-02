@@ -485,6 +485,7 @@ class AutonomousDaemonState(BaseModel):
     isPaused: bool
     isExecuting: bool = False
     activeScanSymbol: Optional[str] = None
+    executionElapsedSeconds: int = 0
     autonomyLevel: AutonomyLevel
     marketStatus: str
     watchlist: List[str]

@@ -433,6 +433,7 @@ export interface AutonomousDaemonState {
   isPaused: boolean;
   isExecuting?: boolean;
   activeScanSymbol?: string;
+  executionElapsedSeconds?: number;
   autonomyLevel: AutonomyLevel;
   marketStatus: string;
   watchlist: string[];

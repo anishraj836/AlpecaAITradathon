@@ -43,6 +43,7 @@ class AutonomousAgentService:
         self._cycle_interval_seconds = 60
         self._current_cycle_seconds = 0
         self._cycle_start_time = time.time()
+        self._cycle_execution_start_time = 0.0
         self._active_scan_symbol: Optional[str] = None
         self._rate_limit_guard = True
         quota_guard.set_enabled(True)
@@ -259,6 +260,7 @@ class AutonomousAgentService:
 
         self._is_executing_cycle = True
         self._active_scan_symbol = symbol
+        self._cycle_execution_start_time = time.time()
         logger.info(f"Starting real autonomous orchestrator cycle for {symbol}...")
 
         # Update initial agent statuses to show scan started
@@ -431,21 +433,25 @@ class AutonomousAgentService:
     def get_dashboard_state(self) -> AgentsDashboardResponse:
         now = time.time()
         if self._is_executing_cycle:
-            curr_sec = self._cycle_interval_seconds
+            curr_sec = 0
             prog_pct = 100.0
+            exec_elapsed = int(max(0.0, now - self._cycle_execution_start_time))
         elif self._is_paused:
             curr_sec = 0
             prog_pct = 0.0
+            exec_elapsed = 0
         else:
             elapsed = max(0.0, now - self._cycle_start_time)
             curr_sec = min(self._cycle_interval_seconds, int(elapsed))
             prog_pct = min(100.0, round((elapsed / max(1, self._cycle_interval_seconds)) * 100.0, 1))
+            exec_elapsed = 0
 
         daemon_state = AutonomousDaemonState(
             isRunning=self._is_running,
             isPaused=self._is_paused,
             isExecuting=self._is_executing_cycle,
             activeScanSymbol=self._active_scan_symbol,
+            executionElapsedSeconds=exec_elapsed,
             autonomyLevel=self._autonomy_level,
             marketStatus=self._market_status,
             watchlist=self._watchlist,
