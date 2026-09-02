@@ -1,6 +1,6 @@
 import httpx
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from app.config import settings
 from app.domain.models import AccountInfo, PositionInfo
 from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
