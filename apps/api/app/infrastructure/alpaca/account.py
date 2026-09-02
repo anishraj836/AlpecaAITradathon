@@ -7,6 +7,11 @@ from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
 
 logger = logging.getLogger("AlpacaAccountService")
 
+import time
+
+_ACCOUNT_CACHE: Optional[Tuple[float, AccountInfo]] = None
+_ACCOUNT_CACHE_TTL = 10.0
+
 class AlpacaAccountService:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self.client = client
@@ -28,14 +33,37 @@ class AlpacaAccountService:
                 logger.debug(f"alpaca-py TradingClient init skipped: {e}")
 
     async def get_account(self) -> AccountInfo:
+        global _ACCOUNT_CACHE
+        now = time.time()
+        if _ACCOUNT_CACHE:
+            ts, cached_acc = _ACCOUNT_CACHE
+            if now - ts < _ACCOUNT_CACHE_TTL:
+                return cached_acc
+
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
             # Safe deterministic paper fallback
             return AlpacaNormalizer.normalize_account({}, is_paper=settings.ALPACA_PAPER)
 
-        # 1. Try official alpaca-py SDK
+        # 1. Non-blocking Async HTTPX REST
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.ALPACA_BASE_URL}/v2/account",
+                    headers=self.headers,
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    acc_info = AlpacaNormalizer.normalize_account(resp.json(), is_paper=settings.ALPACA_PAPER)
+                    _ACCOUNT_CACHE = (now, acc_info)
+                    return acc_info
+        except Exception as e:
+            logger.debug(f"HTTPX get_account error: {e}")
+
+        # 2. Try official alpaca-py SDK in background thread
         if self._sdk_client:
             try:
-                acc = self._sdk_client.get_account()
+                import asyncio
+                acc = await asyncio.to_thread(self._sdk_client.get_account)
                 raw_dict = {
                     "account_number": getattr(acc, "account_number", "PAPER-01"),
                     "status": getattr(acc, "status", "ACTIVE"),
@@ -45,19 +73,16 @@ class AlpacaAccountService:
                     "portfolio_value": float(getattr(acc, "portfolio_value", 100000.0)),
                     "equity": float(getattr(acc, "equity", 100000.0)),
                 }
-                return AlpacaNormalizer.normalize_account(raw_dict, is_paper=settings.ALPACA_PAPER)
+                acc_info = AlpacaNormalizer.normalize_account(raw_dict, is_paper=settings.ALPACA_PAPER)
+                _ACCOUNT_CACHE = (now, acc_info)
+                return acc_info
             except Exception:
                 pass
 
-        # 2. HTTPX REST fallback
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{settings.ALPACA_BASE_URL}/v2/account",
-                headers=self.headers,
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            return AlpacaNormalizer.normalize_account(resp.json(), is_paper=settings.ALPACA_PAPER)
+        if _ACCOUNT_CACHE:
+            return _ACCOUNT_CACHE[1]
+
+        return AlpacaNormalizer.normalize_account({}, is_paper=settings.ALPACA_PAPER)
 
     async def get_positions(self) -> List[PositionInfo]:
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:

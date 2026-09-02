@@ -7,7 +7,9 @@ from app.infrastructure.alpaca.normalizer import AlpacaNormalizer
 
 _MARKET_CONTEXT_CACHE: Dict[str, Tuple[float, MarketContext]] = {}
 _NEWS_CACHE: Dict[str, Tuple[float, list]] = {}
+_CLOCK_CACHE: Optional[Tuple[float, Dict[str, Any]]] = None
 CACHE_TTL_SECONDS = 45.0
+CLOCK_CACHE_TTL_SECONDS = 20.0
 
 class AlpacaMarketDataService:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
@@ -103,6 +105,13 @@ class AlpacaMarketDataService:
         """
         Query Alpaca's live clock API to determine if market is OPEN, PRE_MARKET, or CLOSED.
         """
+        global _CLOCK_CACHE
+        now_ts = time.time()
+        if _CLOCK_CACHE:
+            ts, cached_clock = _CLOCK_CACHE
+            if now_ts - ts < CLOCK_CACHE_TTL_SECONDS:
+                return cached_clock
+
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
             # Deterministic test mode: open by default
             return {
@@ -117,20 +126,25 @@ class AlpacaMarketDataService:
                 resp = await client.get(
                     f"{settings.ALPACA_BASE_URL}/v2/clock",
                     headers=self.headers,
-                    timeout=5.0,
+                    timeout=4.0,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     is_open = bool(data.get("is_open", False))
-                    return {
+                    clk_data = {
                         "is_open": is_open,
                         "next_open": str(data.get("next_open", "")),
                         "next_close": str(data.get("next_close", "")),
                         "market_status": "OPEN" if is_open else "CLOSED",
                         "timestamp": str(data.get("timestamp", "")),
                     }
+                    _CLOCK_CACHE = (now_ts, clk_data)
+                    return clk_data
         except Exception:
             pass
+
+        if _CLOCK_CACHE:
+            return _CLOCK_CACHE[1]
 
         # Fallback to local US/Eastern timezone calculation
         from datetime import datetime, timezone
