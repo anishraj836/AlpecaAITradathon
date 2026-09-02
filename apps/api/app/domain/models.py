@@ -265,6 +265,26 @@ class PositionInfo(BaseModel):
     unrealizedPl: float
     currentPrice: float
 
+class LiquidationEvaluation(BaseModel):
+    symbol: str
+    qty: float
+    side: Literal['long', 'short']
+    avgEntryPrice: float
+    currentPrice: float
+    unrealizedPl: float
+    pnlPct: float
+    dte: Optional[int] = None
+    shouldLiquidate: bool
+    reason: str  # e.g., 'PROFIT_TARGET_50', 'STOP_LOSS_200', 'EXPIRATION_PIN_RISK', 'HOLD'
+    explanation: str
+    actionLabel: str  # e.g., 'Take Profit (+52%)', 'Cut Loss (-210%)', 'Close Risk', 'Hold'
+
+class LiquidationBatchResult(BaseModel):
+    evaluated: int
+    liquidatedCount: int
+    totalRealizedPnl: float
+    evaluations: List[LiquidationEvaluation] = Field(default_factory=list)
+
 class AssetAllocation(BaseModel):
     symbol: str
     assetClass: str
@@ -498,6 +518,7 @@ class AutonomousDaemonState(BaseModel):
     totalCyclesCompleted: int
     totalOrdersExecuted: int
     totalOrdersRejected: int = 0
+    totalLiquidations: int = 0
     totalDislocationsFound: int
     rateLimitGuard: bool = True
     estimatedRpm: float = 0.0

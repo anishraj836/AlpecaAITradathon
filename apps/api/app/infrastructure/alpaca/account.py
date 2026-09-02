@@ -122,6 +122,70 @@ class AlpacaAccountService:
             resp.raise_for_status()
             return AlpacaNormalizer.normalize_positions(resp.json())
 
+    async def close_position(self, symbol_or_asset_id: str, qty: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Liquidate an individual open position via Alpaca Paper API (DELETE /v2/positions/{symbol_or_asset_id}).
+        """
+        # Strict safety check
+        if not settings.ALPACA_PAPER:
+            raise ValueError("Safety Gate Violation: Live trading is disabled in VOLTRON configuration.")
+
+        if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
+            return {
+                "status": "success",
+                "symbol": symbol_or_asset_id,
+                "closed": True,
+                "qty": qty or 1.0,
+                "message": f"Simulated liquidation of {symbol_or_asset_id}",
+            }
+
+        # 1. Try official alpaca-py SDK
+        if self._sdk_client:
+            try:
+                from alpaca.trading.requests import ClosePositionRequest
+                req = ClosePositionRequest(qty=str(qty)) if qty else None
+                order = self._sdk_client.close_position(symbol_or_asset_id, close_options=req)
+                return {
+                    "status": "success",
+                    "symbol": symbol_or_asset_id,
+                    "order_id": getattr(order, "id", None),
+                    "raw": str(order),
+                }
+            except Exception as e:
+                logger.debug(f"alpaca-py close_position fallback to REST: {e}")
+
+        # 2. HTTPX REST fallback
+        async with httpx.AsyncClient() as client:
+            params = {}
+            if qty:
+                params["qty"] = str(qty)
+            resp = await client.delete(
+                f"{settings.ALPACA_BASE_URL}/v2/positions/{symbol_or_asset_id}",
+                headers=self.headers,
+                params=params,
+                timeout=10.0,
+            )
+            if resp.status_code in (200, 204):
+                return {
+                    "status": "success",
+                    "symbol": symbol_or_asset_id,
+                    "response": resp.json() if resp.text and resp.status_code == 200 else "closed",
+                }
+            elif resp.status_code == 404:
+                return {
+                    "status": "already_closed",
+                    "symbol": symbol_or_asset_id,
+                    "message": "Position is no longer open on broker.",
+                }
+            else:
+                logger.error(f"Failed to close position {symbol_or_asset_id}: {resp.status_code} {resp.text}")
+                return {
+                    "status": "error",
+                    "symbol": symbol_or_asset_id,
+                    "error": resp.text,
+                    "code": resp.status_code,
+                }
+
     async def close_all_positions(self) -> Dict[str, Any]:
         if not settings.ALPACA_API_KEY or "DUMMY" in settings.ALPACA_API_KEY:
             return {"status": "success", "closed": 0}

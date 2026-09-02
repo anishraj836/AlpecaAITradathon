@@ -315,7 +315,7 @@ export default function AgentsDashboardPage() {
         )}
 
         {/* Telemetry Metric Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t border-outline-variant/20">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3 pt-3 border-t border-outline-variant/20">
           <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
             <span className="text-[10px] font-mono text-outline uppercase">Fleet Status</span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -405,6 +405,17 @@ export default function AgentsDashboardPage() {
               {daemon?.totalOrdersExecuted || 0} orders
             </span>
             <span className="text-[9px] font-mono text-outline mt-0.5">Alpaca Verified</span>
+          </div>
+
+          <div className="bg-surface p-2.5 rounded-sm border border-emerald-500/30 flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-outline uppercase">Auto-Liquidations</span>
+              <span className="material-symbols-outlined text-[13px] text-emerald-400">bolt</span>
+            </div>
+            <span className="font-mono text-xs font-bold text-emerald-400 mt-1">
+              {daemon?.totalLiquidations || 0} closed
+            </span>
+            <span className="text-[9px] font-mono text-emerald-300/80 mt-0.5">50% Profit / Stop</span>
           </div>
 
           <div className="bg-surface p-2.5 rounded-sm border border-amber-500/30 flex flex-col">

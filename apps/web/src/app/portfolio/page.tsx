@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { PortfolioSummary, PositionInfo, PortfolioHistory } from '@/types/voltron';
+import { PortfolioSummary, PositionInfo, PortfolioHistory, LiquidationEvaluation } from '@/types/voltron';
 
 type SimScenario = 'REALTIME' | 'DAY_7' | 'DAY_14_WIN' | 'SHOCK_DROP';
 
@@ -15,23 +15,30 @@ export default function PortfolioPage() {
   const [historyData, setHistoryData] = useState<PortfolioHistory | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1M');
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const [liquidationEvals, setLiquidationEvals] = useState<Record<string, LiquidationEvaluation>>({});
+  const [isLiquidating, setIsLiquidating] = useState<boolean>(false);
+
+  const loadData = async () => {
+    try {
+      const [pData, evData] = await Promise.all([
+        api.getPortfolio(),
+        api.getLiquidationEvaluations().catch(() => []),
+      ]);
+      setBasePortfolio(pData);
+      const evMap: Record<string, LiquidationEvaluation> = {};
+      if (Array.isArray(evData)) {
+        evData.forEach((ev) => { evMap[ev.symbol] = ev; });
+      }
+      setLiquidationEvals(evMap);
+    } catch (err) {
+      console.error('Failed to load portfolio data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    api.getPortfolio()
-      .then((data) => {
-        if (isMounted) {
-          setBasePortfolio(data);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load portfolio:', err);
-        if (isMounted) setIsLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -773,7 +780,39 @@ export default function PortfolioPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Auto-Liquidate Eligible Button */}
+            {activePositions.length > 0 && (
+              <button
+                type="button"
+                disabled={isLiquidating}
+                onClick={async () => {
+                  setIsLiquidating(true);
+                  try {
+                    const res = await api.liquidateEligiblePositions();
+                    setNotification({
+                      type: 'success',
+                      message: `⚡ Autonomous Engine evaluated ${res.evaluated} positions: ${res.liquidatedCount} liquidated (${res.totalRealizedPnl >= 0 ? '+' : ''}$${res.totalRealizedPnl.toFixed(2)} PnL locked in).`,
+                    });
+                    await loadData();
+                  } catch (e) {
+                    console.warn('Failed to liquidate eligible positions:', e);
+                  } finally {
+                    setIsLiquidating(false);
+                  }
+                }}
+                className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 hover:bg-emerald-500/30 text-emerald-400 text-xs font-mono font-bold rounded-sm flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[14px]">bolt</span>
+                <span>Auto-Liquidate Eligible</span>
+                {Object.values(liquidationEvals).filter(e => e.shouldLiquidate).length > 0 && (
+                  <span className="w-4 h-4 bg-emerald-400 text-background rounded-full text-[10px] flex items-center justify-center font-bold">
+                    {Object.values(liquidationEvals).filter(e => e.shouldLiquidate).length}
+                  </span>
+                )}
+              </button>
+            )}
+
             {activePositions.length > 0 && (
               <button
                 type="button"
@@ -785,6 +824,7 @@ export default function PortfolioPage() {
                       type: 'success',
                       message: '🧹 All open paper positions liquidated. Unrealized PnL reset to clean baseline.',
                     });
+                    await loadData();
                   } catch (e) {
                     console.warn('Failed to close positions:', e);
                   }
@@ -840,50 +880,95 @@ export default function PortfolioPage() {
                   <th className="p-3.5 text-right">Current Mark</th>
                   <th className="p-3.5 text-right">Market Value</th>
                   <th className="p-3.5 text-right">Unrealized P&L</th>
-                  <th className="p-3.5 text-center pr-4">Status</th>
+                  <th className="p-3.5 text-center">Quant Liquidation Rule</th>
+                  <th className="p-3.5 text-center pr-4">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10">
-                {activePositions.map((pos, idx) => (
-                  <tr key={pos.symbol || idx} className="hover:bg-surface-container transition-colors">
-                    <td className="p-3.5 pl-4 font-semibold text-on-surface">
-                      {pos.symbol}
-                    </td>
-                    <td className="p-3.5">
-                      <span
-                        className={`px-2 py-0.5 text-label-xs uppercase rounded-xs font-bold ${
-                          pos.side === 'long'
-                            ? 'bg-primary/20 text-primary border border-primary/30'
-                            : 'bg-tertiary-fixed-dim/20 text-tertiary-fixed-dim border border-tertiary-fixed-dim/30'
-                        }`}
-                      >
-                        {pos.side}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right text-on-surface">
-                      {Math.abs(pos.qty)}
-                    </td>
-                    <td className="p-3.5 text-right text-on-surface-variant">
-                      ${pos.avgEntryPrice.toFixed(2)}
-                    </td>
-                    <td className="p-3.5 text-right text-on-surface font-semibold">
-                      ${pos.currentPrice.toFixed(2)}
-                    </td>
-                    <td className="p-3.5 text-right text-on-surface">
-                      ${pos.marketValue.toFixed(2)}
-                    </td>
-                    <td className="p-3.5 text-right font-semibold">
-                      <span className={pos.unrealizedPl >= 0 ? 'text-primary' : 'text-error'}>
-                        {pos.unrealizedPl >= 0 ? `+$${pos.unrealizedPl.toFixed(2)}` : `-$${Math.abs(pos.unrealizedPl).toFixed(2)}`}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-center pr-4">
-                      <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px]">
-                        MONITORED
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {activePositions.map((pos, idx) => {
+                  const ev = liquidationEvals[pos.symbol];
+                  return (
+                    <tr key={pos.symbol || idx} className="hover:bg-surface-container transition-colors">
+                      <td className="p-3.5 pl-4 font-semibold text-on-surface">
+                        {pos.symbol}
+                      </td>
+                      <td className="p-3.5">
+                        <span
+                          className={`px-2 py-0.5 text-label-xs uppercase rounded-xs font-bold ${
+                            pos.side === 'long'
+                              ? 'bg-primary/20 text-primary border border-primary/30'
+                              : 'bg-tertiary-fixed-dim/20 text-tertiary-fixed-dim border border-tertiary-fixed-dim/30'
+                          }`}
+                        >
+                          {pos.side}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-right text-on-surface">
+                        {Math.abs(pos.qty)}
+                      </td>
+                      <td className="p-3.5 text-right text-on-surface-variant">
+                        ${pos.avgEntryPrice.toFixed(2)}
+                      </td>
+                      <td className="p-3.5 text-right text-on-surface font-semibold">
+                        ${pos.currentPrice.toFixed(2)}
+                      </td>
+                      <td className="p-3.5 text-right text-on-surface">
+                        ${pos.marketValue.toFixed(2)}
+                      </td>
+                      <td className="p-3.5 text-right font-semibold">
+                        <span className={pos.unrealizedPl >= 0 ? 'text-primary' : 'text-error'}>
+                          {pos.unrealizedPl >= 0 ? `+$${pos.unrealizedPl.toFixed(2)}` : `-$${Math.abs(pos.unrealizedPl).toFixed(2)}`}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        {ev ? (
+                          <span
+                            title={ev.explanation}
+                            className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border ${
+                              ev.reason === 'PROFIT_TARGET_50' || ev.reason === 'PROFIT_TARGET_LONG'
+                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                : ev.reason === 'STOP_LOSS_200'
+                                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                                : ev.reason === 'EXPIRATION_PIN_RISK'
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                : 'bg-primary/10 text-primary/80 border-primary/20'
+                            }`}
+                          >
+                            {ev.actionLabel}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px]">
+                            MONITORED
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center pr-4">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await api.closePosition(pos.symbol);
+                              setNotification({
+                                type: 'success',
+                                message: `⚡ Liquidated ${pos.symbol} via Alpaca Paper API.`,
+                              });
+                              await loadData();
+                            } catch (e) {
+                              console.warn('Failed to close position:', e);
+                            }
+                          }}
+                          className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded border transition-colors ${
+                            ev?.shouldLiquidate
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                              : 'bg-surface border border-outline-variant/30 text-on-surface-variant hover:text-error hover:border-error/40'
+                          }`}
+                        >
+                          Liquidate
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

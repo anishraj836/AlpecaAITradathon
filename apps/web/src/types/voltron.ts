@@ -290,6 +290,28 @@ export interface PositionInfo {
   currentPrice: number;
 }
 
+export interface LiquidationEvaluation {
+  symbol: string;
+  qty: number;
+  side: 'long' | 'short';
+  avgEntryPrice: number;
+  currentPrice: number;
+  unrealizedPl: number;
+  pnlPct: number;
+  dte?: number;
+  shouldLiquidate: boolean;
+  reason: string;
+  explanation: string;
+  actionLabel: string;
+}
+
+export interface LiquidationBatchResult {
+  evaluated: number;
+  liquidatedCount: number;
+  totalRealizedPnl: number;
+  evaluations: LiquidationEvaluation[];
+}
+
 export interface AssetAllocation {
   symbol: string;
   assetClass: string;
@@ -446,6 +468,7 @@ export interface AutonomousDaemonState {
   totalCyclesCompleted: number;
   totalOrdersExecuted: number;
   totalOrdersRejected: number;
+  totalLiquidations?: number;
   totalDislocationsFound: number;
   rateLimitGuard: boolean;
   estimatedRpm: number;

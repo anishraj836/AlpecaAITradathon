@@ -2,7 +2,14 @@ from fastapi import APIRouter, Depends
 from typing import Dict, Any, List
 from app.api.deps import get_broker_gateway
 from app.infrastructure.alpaca.gateway import BrokerGateway
-from app.domain.models import PortfolioSummary, DiversificationAnalysis, AssetAllocation
+from app.domain.models import (
+    PortfolioSummary,
+    DiversificationAnalysis,
+    AssetAllocation,
+    LiquidationEvaluation,
+    LiquidationBatchResult,
+)
+from app.services.liquidation_service import liquidation_service
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
@@ -141,3 +148,32 @@ async def get_portfolio_history(
     broker_gw: BrokerGateway = Depends(get_broker_gateway),
 ) -> Dict[str, Any]:
     return await broker_gw.get_portfolio_history(period=period, timeframe=timeframe)
+
+@router.post("/close/{symbol}")
+async def close_position(
+    symbol: str,
+    broker_gw: BrokerGateway = Depends(get_broker_gateway),
+) -> Dict[str, Any]:
+    """Close an individual position on Alpaca and update the learning engine."""
+    positions = await broker_gw.get_positions()
+    pos = next((p for p in positions if p.symbol == symbol), None)
+    if pos:
+        ev = liquidation_service.evaluate_position(pos)
+        return await liquidation_service.execute_liquidation(pos, ev, broker_gw)
+    return await broker_gw.close_position(symbol)
+
+@router.post("/liquidate-eligible", response_model=LiquidationBatchResult)
+async def liquidate_eligible_positions(
+    broker_gw: BrokerGateway = Depends(get_broker_gateway),
+) -> LiquidationBatchResult:
+    """Autonomously scan open positions and liquidate all eligible ones (50% profit target, 200% stop loss, <=2 DTE)."""
+    positions = await broker_gw.get_positions()
+    return await liquidation_service.liquidate_eligible(positions, broker_gw)
+
+@router.get("/liquidation-evaluations", response_model=List[LiquidationEvaluation])
+async def get_liquidation_evaluations(
+    broker_gw: BrokerGateway = Depends(get_broker_gateway),
+) -> List[LiquidationEvaluation]:
+    """Inspect current quantitative liquidation recommendations across all open positions."""
+    positions = await broker_gw.get_positions()
+    return liquidation_service.evaluate_all(positions)

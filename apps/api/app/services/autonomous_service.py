@@ -15,6 +15,7 @@ from app.domain.models import (
     OrchestratorEvent,
 )
 from app.services.event_broadcaster import broadcaster
+from app.services.liquidation_service import liquidation_service
 from app.api.deps import get_broker_gateway, get_quant_gateway
 from app.infrastructure.database.session import async_session_factory
 from app.agents.orchestrator import VoltronOrchestrator
@@ -51,6 +52,7 @@ class AutonomousAgentService:
         self._total_orders = 0
         self._total_rejected = 0
         self._total_dislocations = 0
+        self._total_liquidations = 0
         self._last_scan_at = _now_iso()
         self._next_scan_at = _now_iso()
         self._lock = asyncio.Lock()
@@ -246,6 +248,70 @@ class AutonomousAgentService:
                 logger.error(f"Error in AutonomousAgentService background loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
+    async def evaluate_and_liquidate_positions(self) -> int:
+        """
+        Autonomous Liquidation Monitor:
+        1. Queries live open positions from Alpaca paper broker.
+        2. Evaluates each position against:
+           - 50% Profit Target (Lock in gains after majority of theta is harvested)
+           - 200% Stop Loss (Mechanical risk containment to prevent catastrophic loss)
+           - <= 2 DTE Expiration Risk (Eliminate gamma explosion & assignment risk)
+           - Long Wing Surge (+80% gain on protective wings)
+        3. In AUTOPILOT / UNCAPPED_AUTONOMOUS mode, immediately dispatches liquidation orders.
+        4. In COPILOT mode, logs alerts and prepares 1-click execution.
+        """
+        try:
+            positions = await self._broker.get_positions()
+            if not positions:
+                return 0
+
+            evaluations = liquidation_service.evaluate_all(positions)
+            eligible = [ev for ev in evaluations if ev.shouldLiquidate]
+
+            if not eligible:
+                return 0
+
+            liquidated_count = 0
+            for ev in eligible:
+                pos = next((p for p in positions if p.symbol == ev.symbol), None)
+                if not pos:
+                    continue
+
+                if self._autonomy_level in ("AUTOPILOT", "UNCAPPED_AUTONOMOUS"):
+                    res = await liquidation_service.execute_liquidation(pos, ev, self._broker)
+                    if res.get("success"):
+                        liquidated_count += 1
+                        self._total_liquidations += 1
+                        self._append_log(
+                            "AUTONOMOUS_DAEMON",
+                            "Autonomous Liquidation Engine",
+                            "DISPATCH",
+                            f"AUTOPILOT LIQUIDATION: Closed {ev.symbol} | {ev.actionLabel}. Realized PnL: ${ev.unrealizedPl:+.2f}. Reason: {ev.explanation}",
+                            ev.symbol,
+                        )
+                        await broadcaster.broadcast(OrchestratorEvent(
+                            decisionId=f"LIQ-{ev.symbol}",
+                            eventType="position_liquidated",
+                            stage="LIQUIDATION",
+                            status="COMPLETE",
+                            message=f"Liquidated {ev.symbol}: {ev.actionLabel} (${ev.unrealizedPl:+.2f})",
+                            timestamp=_now_iso(),
+                            payload={"symbol": ev.symbol, "pnl": ev.unrealizedPl, "reason": ev.reason},
+                        ))
+                else:
+                    self._append_log(
+                        "AUTONOMOUS_DAEMON",
+                        "Autonomous Liquidation Engine",
+                        "WARNING",
+                        f"LIQUIDATION ALERT: {ev.symbol} reached {ev.reason} ({ev.actionLabel}). Ready for 1-click execution in Portfolio.",
+                        ev.symbol,
+                    )
+
+            return liquidated_count
+        except Exception as e:
+            logger.error(f"Error in autonomous liquidation check: {e}", exc_info=True)
+            return 0
+
     async def execute_real_orchestrator_cycle(self, symbol: str):
         """
         Executes a 100% genuine multi-agent orchestrator scan on the given symbol:
@@ -262,6 +328,9 @@ class AutonomousAgentService:
         self._active_scan_symbol = symbol
         self._cycle_execution_start_time = time.time()
         logger.info(f"Starting real autonomous orchestrator cycle for {symbol}...")
+
+        # Evaluate and liquidate any existing positions meeting profit target or stop loss rules
+        await self.evaluate_and_liquidate_positions()
 
         # Update initial agent statuses to show scan started
         for r, agent in self._agents.items():
@@ -461,6 +530,7 @@ class AutonomousAgentService:
             totalCyclesCompleted=self._total_cycles,
             totalOrdersExecuted=self._total_orders,
             totalOrdersRejected=self._total_rejected,
+            totalLiquidations=self._total_liquidations,
             totalDislocationsFound=self._total_dislocations,
             rateLimitGuard=self._rate_limit_guard,
             estimatedRpm=quota_guard.get_current_rpm(),

@@ -30,6 +30,9 @@ export interface ApiClient {
   getPortfolioHistory(period?: string, timeframe?: string): Promise<PortfolioHistory>;
   rebalancePortfolio(): Promise<PortfolioSummary>;
   closeAllPositions(): Promise<PortfolioSummary>;
+  closePosition(symbol: string): Promise<{ success: boolean; symbol: string; message?: string }>;
+  liquidateEligiblePositions(): Promise<import('@/types/voltron').LiquidationBatchResult>;
+  getLiquidationEvaluations(): Promise<import('@/types/voltron').LiquidationEvaluation[]>;
   getDecision(id: string): Promise<DecisionPacket>;
   getOrder(id: string): Promise<OrderResult>;
   approveDecision(id: string): Promise<OrderResult>;
@@ -101,6 +104,18 @@ class HttpSseApiAdapter implements ApiClient {
 
   async closeAllPositions(): Promise<PortfolioSummary> {
     return this.fetchJson<PortfolioSummary>('/portfolio/close-all', { method: 'POST' });
+  }
+
+  async closePosition(symbol: string): Promise<{ success: boolean; symbol: string; message?: string }> {
+    return this.fetchJson<{ success: boolean; symbol: string; message?: string }>(`/portfolio/close/${encodeURIComponent(symbol)}`, { method: 'POST' });
+  }
+
+  async liquidateEligiblePositions(): Promise<import('@/types/voltron').LiquidationBatchResult> {
+    return this.fetchJson<import('@/types/voltron').LiquidationBatchResult>('/portfolio/liquidate-eligible', { method: 'POST' });
+  }
+
+  async getLiquidationEvaluations(): Promise<import('@/types/voltron').LiquidationEvaluation[]> {
+    return this.fetchJson<import('@/types/voltron').LiquidationEvaluation[]>('/portfolio/liquidation-evaluations');
   }
 
   async getPortfolioHistory(period: string = '1M', timeframe: string = '1D'): Promise<PortfolioHistory> {

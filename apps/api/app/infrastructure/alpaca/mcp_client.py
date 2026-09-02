@@ -114,6 +114,9 @@ class AlpacaBrokerGateway(BrokerGateway):
     async def get_news(self, symbol: str, limit: int = 5) -> list:
         return await self.market_service.get_news(symbol, limit=limit)
 
+    async def close_position(self, symbol_or_asset_id: str, qty: Optional[float] = None) -> dict:
+        return await self.account_service.close_position(symbol_or_asset_id, qty=qty)
+
     async def close_all_positions(self) -> dict:
         return await self.account_service.close_all_positions()
 
