@@ -431,11 +431,14 @@ export interface AgentLogEntry {
 export interface AutonomousDaemonState {
   isRunning: boolean;
   isPaused: boolean;
+  isExecuting?: boolean;
+  activeScanSymbol?: string;
   autonomyLevel: AutonomyLevel;
   marketStatus: string;
   watchlist: string[];
   currentCycleSeconds: number;
   cycleIntervalSeconds: number;
+  cycleProgressPct?: number;
   totalCyclesCompleted: number;
   totalOrdersExecuted: number;
   totalOrdersRejected: number;
@@ -448,11 +451,12 @@ export interface AutonomousDaemonState {
 }
 
 export interface AutonomousControlRequest {
-  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD';
+  action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL';
   autonomyLevel?: AutonomyLevel;
   watchlist?: string[];
   symbol?: string;
   rateLimitGuardEnabled?: boolean;
+  cycleIntervalSeconds?: number;
 }
 
 export interface AgentsDashboardResponse {

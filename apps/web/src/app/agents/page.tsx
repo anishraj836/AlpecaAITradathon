@@ -64,6 +64,7 @@ export default function AgentsDashboardPage() {
   const [newTickerInput, setNewTickerInput] = useState('');
   const [manualScanSymbol, setManualScanSymbol] = useState('PLTR');
   const [notification, setNotification] = useState<string | null>(null);
+  const [realtimeSeconds, setRealtimeSeconds] = useState(0);
 
   const consoleBoxRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +74,7 @@ export default function AgentsDashboardPage() {
       const data = await api.getAgentsStatus();
       setAgents(data.agents);
       setDaemon(data.daemon);
+      setRealtimeSeconds(data.daemon.currentCycleSeconds);
       setLogs(data.recentLogs);
     } catch (err) {
       console.warn('Failed to load agents status:', err);
@@ -88,7 +90,20 @@ export default function AgentsDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD', payload?: any) => {
+  // Real-time 1-second local smooth tick
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRealtimeSeconds((prev) => {
+        if (daemon?.isPaused) return 0;
+        if (daemon?.isExecuting) return daemon.cycleIntervalSeconds;
+        const max = daemon?.cycleIntervalSeconds || 60;
+        return prev < max ? prev + 1 : 0;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [daemon?.isPaused, daemon?.isExecuting, daemon?.cycleIntervalSeconds]);
+
+  const handleControl = async (action: 'PAUSE' | 'RESUME' | 'TRIGGER_SCAN' | 'SET_AUTONOMY' | 'SET_WATCHLIST' | 'SET_RATE_LIMIT_GUARD' | 'SET_CYCLE_INTERVAL', payload?: any) => {
     setActionLoading(true);
     try {
       const updatedDaemon = await api.controlAutonomousDaemon({
@@ -96,11 +111,13 @@ export default function AgentsDashboardPage() {
         ...payload,
       });
       setDaemon(updatedDaemon);
+      setRealtimeSeconds(updatedDaemon.currentCycleSeconds);
       if (action === 'PAUSE') setNotification('⏸️ Autonomous worker loop paused.');
       else if (action === 'RESUME') setNotification('▶️ Autonomous worker loop resumed.');
       else if (action === 'TRIGGER_SCAN') setNotification(`⚡ Manual scan triggered for ${payload?.symbol || 'watchlist'}.`);
       else if (action === 'SET_AUTONOMY') setNotification(`🛡️ Autonomy level updated to ${payload?.autonomyLevel}.`);
       else if (action === 'SET_RATE_LIMIT_GUARD') setNotification(payload?.rateLimitGuardEnabled ? '🛡️ Rate-Limit Guard ENABLED (15 RPM Safe Mode).' : '⚡ Rate-Limit Guard DISABLED (Uncapped Turbo Mode).');
+      else if (action === 'SET_CYCLE_INTERVAL') setNotification(`⏱️ Cycle interval set to ${payload?.cycleIntervalSeconds}s.`);
       else if (action === 'SET_WATCHLIST') setNotification('📋 Watchlist successfully updated.');
       setTimeout(() => setNotification(null), 4000);
       await fetchTelemetry();
@@ -315,12 +332,56 @@ export default function AgentsDashboardPage() {
             </div>
           </div>
 
-          <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col">
-            <span className="text-[10px] font-mono text-outline uppercase">Cycle Interval</span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="font-mono text-xs font-bold text-primary">
-                {daemon?.currentCycleSeconds || 0}s / {daemon?.cycleIntervalSeconds || 45}s
+          <div className="bg-surface p-2.5 rounded-sm border border-outline-variant/30 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-outline uppercase">Cycle Interval</span>
+              <div className="flex items-center gap-1">
+                {[15, 30, 60].map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => handleControl('SET_CYCLE_INTERVAL', { cycleIntervalSeconds: sec })}
+                    className={`px-1.5 py-0.5 text-[9px] font-mono rounded transition-colors ${
+                      daemon?.cycleIntervalSeconds === sec
+                        ? 'bg-primary text-on-primary font-bold'
+                        : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
+                    }`}
+                    title={`Set cycle interval to ${sec} seconds`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className={`font-mono text-xs font-bold ${daemon?.isExecuting ? 'text-amber-400 animate-pulse' : 'text-primary'}`}>
+                {daemon?.isExecuting
+                  ? `⚡ SCANNING ${daemon?.activeScanSymbol || ''}...`
+                  : daemon?.isPaused
+                  ? 'PAUSED'
+                  : `${realtimeSeconds}s / ${daemon?.cycleIntervalSeconds || 60}s`}
               </span>
+              <span className="text-[10px] font-mono text-outline">
+                {daemon?.isExecuting ? 'ACTIVE' : `${Math.min(100, Math.round((realtimeSeconds / (daemon?.cycleIntervalSeconds || 60)) * 100))}%`}
+              </span>
+            </div>
+            {/* Real-time Animated Progress Bar */}
+            <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden mt-1.5">
+              <div
+                className={`h-full transition-all duration-300 ease-linear ${
+                  daemon?.isExecuting
+                    ? 'bg-amber-400 animate-pulse w-full'
+                    : daemon?.isPaused
+                    ? 'bg-outline-variant/40 w-0'
+                    : 'bg-primary'
+                }`}
+                style={{
+                  width: daemon?.isExecuting
+                    ? '100%'
+                    : daemon?.isPaused
+                    ? '0%'
+                    : `${Math.min(100, (realtimeSeconds / (daemon?.cycleIntervalSeconds || 60)) * 100)}%`,
+                }}
+              />
             </div>
           </div>
 

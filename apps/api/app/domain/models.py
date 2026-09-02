@@ -483,11 +483,14 @@ class AgentLogEntry(BaseModel):
 class AutonomousDaemonState(BaseModel):
     isRunning: bool
     isPaused: bool
+    isExecuting: bool = False
+    activeScanSymbol: Optional[str] = None
     autonomyLevel: AutonomyLevel
     marketStatus: str
     watchlist: List[str]
     currentCycleSeconds: int
     cycleIntervalSeconds: int
+    cycleProgressPct: float = 0.0
     totalCyclesCompleted: int
     totalOrdersExecuted: int
     totalOrdersRejected: int = 0
@@ -499,11 +502,12 @@ class AutonomousDaemonState(BaseModel):
     nextScanAt: Optional[str] = None
 
 class AutonomousControlRequest(BaseModel):
-    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST', 'SET_RATE_LIMIT_GUARD']
+    action: Literal['PAUSE', 'RESUME', 'TRIGGER_SCAN', 'SET_AUTONOMY', 'SET_WATCHLIST', 'SET_RATE_LIMIT_GUARD', 'SET_CYCLE_INTERVAL']
     autonomyLevel: Optional[AutonomyLevel] = None
     watchlist: Optional[List[str]] = None
     symbol: Optional[str] = None
     rateLimitGuardEnabled: Optional[bool] = None
+    cycleIntervalSeconds: Optional[int] = None
 
 class AgentsDashboardResponse(BaseModel):
     agents: List[AgentFleetStatus]

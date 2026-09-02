@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 import logging
 from typing import List, Dict, Any, Optional
@@ -41,6 +42,8 @@ class AutonomousAgentService:
         self._watchlist_index = 0
         self._cycle_interval_seconds = 60
         self._current_cycle_seconds = 0
+        self._cycle_start_time = time.time()
+        self._active_scan_symbol: Optional[str] = None
         self._rate_limit_guard = True
         quota_guard.set_enabled(True)
         self._total_cycles = 0
@@ -209,17 +212,22 @@ class AutonomousAgentService:
         """
         logger.info("Autonomous Agent Fleet Service genuine loop started.")
         await self._sync_from_database()
+        self._cycle_start_time = time.time()
         while self._is_running:
             try:
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.5)
 
                 if self._is_paused or self._is_executing_cycle:
+                    if self._is_paused:
+                        self._cycle_start_time = time.time()
                     continue
 
-                self._current_cycle_seconds += 1
+                elapsed = max(0.0, time.time() - self._cycle_start_time)
+                self._current_cycle_seconds = int(elapsed)
 
                 # When countdown reaches cycle interval, execute next watchlist candidate
-                if self._current_cycle_seconds >= self._cycle_interval_seconds:
+                if elapsed >= self._cycle_interval_seconds:
+                    self._cycle_start_time = time.time()
                     self._current_cycle_seconds = 0
                     self._last_scan_at = _now_iso()
 
@@ -228,6 +236,7 @@ class AutonomousAgentService:
                         sym = self._watchlist[self._watchlist_index % len(self._watchlist)]
                         self._watchlist_index += 1
                         await self.execute_real_orchestrator_cycle(sym)
+                        self._cycle_start_time = time.time()
 
             except asyncio.CancelledError:
                 logger.info("Autonomous Agent Fleet Service loop stopped.")
@@ -249,6 +258,7 @@ class AutonomousAgentService:
             return
 
         self._is_executing_cycle = True
+        self._active_scan_symbol = symbol
         logger.info(f"Starting real autonomous orchestrator cycle for {symbol}...")
 
         # Update initial agent statuses to show scan started
@@ -414,16 +424,34 @@ class AutonomousAgentService:
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "ERROR", f"Error scanning {symbol}: {str(e)}", symbol)
         finally:
             self._is_executing_cycle = False
+            self._active_scan_symbol = None
+            self._cycle_start_time = time.time()
+            self._current_cycle_seconds = 0
 
     def get_dashboard_state(self) -> AgentsDashboardResponse:
+        now = time.time()
+        if self._is_executing_cycle:
+            curr_sec = self._cycle_interval_seconds
+            prog_pct = 100.0
+        elif self._is_paused:
+            curr_sec = 0
+            prog_pct = 0.0
+        else:
+            elapsed = max(0.0, now - self._cycle_start_time)
+            curr_sec = min(self._cycle_interval_seconds, int(elapsed))
+            prog_pct = min(100.0, round((elapsed / max(1, self._cycle_interval_seconds)) * 100.0, 1))
+
         daemon_state = AutonomousDaemonState(
             isRunning=self._is_running,
             isPaused=self._is_paused,
+            isExecuting=self._is_executing_cycle,
+            activeScanSymbol=self._active_scan_symbol,
             autonomyLevel=self._autonomy_level,
             marketStatus=self._market_status,
             watchlist=self._watchlist,
-            currentCycleSeconds=self._current_cycle_seconds,
+            currentCycleSeconds=curr_sec,
             cycleIntervalSeconds=self._cycle_interval_seconds,
+            cycleProgressPct=prog_pct,
             totalCyclesCompleted=self._total_cycles,
             totalOrdersExecuted=self._total_orders,
             totalOrdersRejected=self._total_rejected,
@@ -454,6 +482,7 @@ class AutonomousAgentService:
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "WARNING", "User paused the autonomous worker loop.")
         elif req.action == "RESUME":
             self._is_paused = False
+            self._cycle_start_time = time.time()
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", "User resumed the autonomous worker loop.")
         elif req.action == "SET_AUTONOMY" and req.autonomyLevel:
             self._autonomy_level = req.autonomyLevel
@@ -469,6 +498,13 @@ class AutonomousAgentService:
             else:
                 self._cycle_interval_seconds = 30
                 self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "WARNING", "⚡ Rate-Limit Guard DISABLED: Uncapped turbo execution mode active.")
+            self._cycle_start_time = time.time()
+        elif req.action == "SET_CYCLE_INTERVAL":
+            if req.cycleIntervalSeconds and req.cycleIntervalSeconds >= 5:
+                self._cycle_interval_seconds = int(req.cycleIntervalSeconds)
+                self._cycle_start_time = time.time()
+                self._current_cycle_seconds = 0
+                self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"⏱️ Cycle interval set to {self._cycle_interval_seconds}s.")
         elif req.action == "SET_WATCHLIST" and req.watchlist:
             self._watchlist = [w.strip().upper() for w in req.watchlist if w.strip()]
             self._append_log("AUTONOMOUS_DAEMON", "Autonomous Worker Loop", "INFO", f"Watchlist updated: {', '.join(self._watchlist)}.")
